@@ -965,10 +965,8 @@ fn deletion_past_the_end_that_can_be_written_off_the_transcript() {
         owed_beside(&record, &from_the_tail, Some(&back)),
         Err(NotDerived::PlacementInsideTheTranscript)
     );
-    assert_eq!(
-        owed(&record, &from_the_tail),
-        Err(NotDerived::NoReferenceBases)
-    );
+    // Without a reference sequence the deletion is read at the record's own place.
+    assert_eq!(owed(&record, &from_the_tail), ok("stop_lost"));
     // From the last whole codon past the end, the span Ensembl VEP reads as untested.
     let from_the_codon = row(
         "-",
@@ -1007,7 +1005,8 @@ fn deletion_past_the_end_that_leaves_the_first_tail_base_before_the_adenines() {
         owed_beside(&record, &from_the_tail, Some(&apart)),
         ok("stop_lost")
     );
-    // From the second tail base past the end: a shape left out.
+    // From the second tail base past the end: the first tail base and two adenines are
+    // a stop codon, with a reference sequence and at the record's own place without one.
     let from_the_second = row(
         "-",
         record.at(17, 19),
@@ -1017,8 +1016,15 @@ fn deletion_past_the_end_that_leaves_the_first_tail_base_before_the_adenines() {
     );
     assert_eq!(
         owed_beside(&record, &from_the_second, Some(&apart)),
-        Err(NotDerived::ShapeNotCovered)
+        ok("stop_retained_variant")
     );
+    assert_eq!(owed(&record, &from_the_second), ok("stop_retained_variant"));
+    // The pair is set aside only where vep-rs's row holds the derived term.
+    assert_eq!(
+        class(&record, &from_the_second, "stop_retained_variant"),
+        Some(CodingEndClass::StopCodonCompleted)
+    );
+    assert_eq!(class(&record, &from_the_second, "stop_lost"), None);
 }
 
 #[test]
@@ -1093,6 +1099,53 @@ fn a_substitution_in_a_first_codon_that_is_no_start_codon_owes_the_terms_of_its_
         );
         assert_eq!(class(&record, &substitution, ""), None, "{theirs}");
     }
+}
+
+#[test]
+fn a_substitution_in_a_first_codon_that_is_no_start_codon_before_a_completed_stop_codon() {
+    // No start codon is shown and polyadenylation completes the stop codon: the first
+    // residue is derived on the completed sequence, as any other.
+    let record = Made {
+        codon_table: Some(2),
+        ..made(&[GLU, ALA, GLY, &STOP[..1]], 0)
+    };
+    let first = row(
+        "T",
+        record.at(9, 9),
+        1,
+        "start_lost",
+        ["9", "3", "1", "E/D", "gaA/gaT"],
+    );
+    assert_eq!(owed(&record, &first), ok("missense_variant"));
+    assert_eq!(
+        class(&record, &first, "missense_variant"),
+        Some(CodingEndClass::StartCodonOverlap)
+    );
+    assert_eq!(class(&record, &first, "synonymous_variant"), None);
+    // With `cds_start_NF` the first residue is not derived there.
+    let flagged = Made {
+        codes: vec!["cds_start_NF"],
+        ..record
+    };
+    assert_eq!(owed(&flagged, &first), Err(NotDerived::SequenceEdit));
+    // Nor in a first codon that the start exon's phase pads.
+    let padded = Made {
+        codes: Vec::new(),
+        coding: ["NNA", ALA, GLY, &STOP[..1]].concat(),
+        start_phase: 2,
+        ..flagged
+    };
+    let in_the_padded_codon = row(
+        "T",
+        padded.at(7, 7),
+        1,
+        "start_lost",
+        ["7", "3", "1", "X", "nnA/nnT"],
+    );
+    assert_eq!(
+        owed(&padded, &in_the_padded_codon),
+        Err(NotDerived::SequenceEdit)
+    );
 }
 
 #[test]
@@ -1863,8 +1916,8 @@ fn a_row_on_a_completed_stop_codon_that_the_derivation_does_not_cover_is_not_der
         owed(&record, &lost),
         Err(NotDerived::CellsDiffer("CDS_position"))
     );
-    // The codons hold protein position 1, or a residue the cached peptide states
-    // otherwise than its codon.
+    // The codons hold protein position 1 where a start codon stands, or a residue the
+    // cached peptide states otherwise than its codon.
     let first = row(
         "C",
         record.at(8, 8),

@@ -383,9 +383,9 @@ expect_log "parity: the generator reads the converted cache under seed 1" genera
     "--cache $CASE/work/json_cache --seed 1 --output $CASE/out/variants.vcf --summary $CASE/out/variants.summary.tsv"
 expect_log "parity: vep-rs runs offline on the converted cache under default flags" vep_rs.log \
     "-i $CASE/out/variants.vcf -o $CASE/work/vep_rs/variants.txt --offline --json_cache $CASE/work/json_cache --species made_up_genome --assembly ASM1 --warning_file $CASE/work/logs/vep_rs.warnings --no_stats"
-expect_log "parity: the comparator reads both outputs with the input records, no contig filter and the Ensembl cache" comparator.log \
-    "--perl-dir $CASE/work/ensembl_vep --rust-dir $CASE/work/vep_rs --report-dir $CASE/out/comparison --input-vcf $CASE/out/variants.vcf --no-canonical-contigs --assembly ASM1 --ensembl-cache $CASE/work/ensembl_cache/made_up_genome/63_ASM1"
-expect_no_log "parity: the comparator is given no converted cache for a cache of the Ensembl transcript set" comparator.log "--json-cache"
+expect_log "parity: the comparator reads both outputs with the input records, no contig filter, the converted cache and the Ensembl cache" comparator.log \
+    "--perl-dir $CASE/work/ensembl_vep --rust-dir $CASE/work/vep_rs --report-dir $CASE/out/comparison --input-vcf $CASE/out/variants.vcf --no-canonical-contigs --assembly ASM1 --json-cache $CASE/work/json_cache --ensembl-cache $CASE/work/ensembl_cache/made_up_genome/63_ASM1"
+expect_log "parity: the comparator is given the converted cache for a cache of the Ensembl transcript set" comparator.log "--json-cache $CASE/work/json_cache"
 expect_log "parity: the digest is the table tool's over vep-rs's output" table.log "digest $CASE/work/vep_rs/variants.txt"
 for left in out/variants.vcf out/variants.summary.tsv out/ensembl_vep.txt.gz out/ensembl_vep.warnings.txt \
     out/comparison/summary.json out/job.json work/layout.tsv work/steps.tsv; do

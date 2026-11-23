@@ -1043,7 +1043,7 @@ if [[ -f "$HARNESS" ]]; then
     _od="$TMP/tree_comparators_whole"
     _od_vcf="$_od/data/vcf/grch37/all_variants_canonical/clinvar_grch37.canonical.vcf.gz"
     _od_gt="$_od/data/ground_truth/perl/snp_indel/s01"
-    mkdir -p "$_od/bin" "$(dirname "$_od_vcf")" "$_od_gt"
+    mkdir -p "$_od/bin" "$(dirname "$_od_vcf")" "$_od_gt" "$_od/data/caches/vep-rs/grch37/transcripts"
     printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t1000\tv1\tA\tG\t.\t.\t.\n21\t2000\tv2\tC\tT\t.\t.\t.\n21\t3000\tv3\tG\tA\t.\t.\t.\n' | gzip -c >"$_od_vcf"
     _od_header='#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n'
     _od_row1='v1\t21:1000\tG\tENSG01\tENST01\tTranscript\tmissense_variant\t10\t10\t4\tK/R\taAg/aGg\t%s\tIMPACT=MODERATE\n'
@@ -1080,6 +1080,8 @@ STUB
             --output-dir "$_od/out" --datasets s01 --reference-release 116.2 "$@" >"$_od/log" 2>&1
     }
     _tuple_start="$_outputs_rel --perl-dir $_od/out/s01/perl --rust-dir $_od/out/s01/rust --report-dir $_od/out/s01/report --reference-release 116.2 --input-vcf $_od_vcf --assembly GRCh37"
+    # The vep-rs cell's call ends with the cache the cell annotated with; the fastVEP cell's does not.
+    _veprs_tuple_start="$_tuple_start --json-cache $_od/data/caches/vep-rs/grch37"
     _fields_start="$_fields_rel --perl $_od/out/s01/perl/output.txt --rust $_od/out/s01/rust/output.txt --out $_od/out/s01/report/fields.json --tmp-dir $_od/out/s01"
     _run_in_tree repo-unbuilt
     rc=$?
@@ -1107,12 +1109,12 @@ STUB
             bad "--walltime-only harness without the tools: expected rc=0 and an engine run, got rc=$rc '$(tail -2 "$_od/log")'"
         _run_in_tree repo-tuple-only --skip-fields
         rc=$?
-        [[ "$rc" -eq 0 && -e "$_od/engine.ran" && "$(cat "$_started")" == "$_fdir/repo-tuple-only/$_tuple_start" ]] &&
+        [[ "$rc" -eq 0 && -e "$_od/engine.ran" && "$(cat "$_started")" == "$_fdir/repo-tuple-only/$_veprs_tuple_start" ]] &&
             ok "a --skip-fields harness run in a tree without the field comparator: the cell runs and the tree's tuple comparator is the one comparator started" ||
             bad "--skip-fields harness without the field comparator: expected rc=0 and the tuple comparator's one start, got rc=$rc '$(tail -2 "$_od/log")' and '$(cat "$_started")'"
         _run_in_tree repo
         rc=$?
-        [[ "$rc" -eq 0 && "$(cat "$_started")" == "$_fdir/repo/$_tuple_start"$'\n'"$_fdir/repo/$_fields_start" ]] &&
+        [[ "$rc" -eq 0 && "$(cat "$_started")" == "$_fdir/repo/$_veprs_tuple_start"$'\n'"$_fdir/repo/$_fields_start" ]] &&
             ok "a harness run that scores: the tree's tuple comparator starts on the cell's two output directories, then its field comparator on the two outputs, and nothing else" ||
             bad "scoring harness run: expected rc=0 and the two tree comparators' starts, got rc=$rc '$(tail -2 "$_od/log")' and '$(cat "$_started")'"
         (
@@ -1120,7 +1122,7 @@ STUB
             _run_in_tree repo
         )
         rc=$?
-        [[ "$rc" -eq 0 && "$(cat "$_started")" == "$_fdir/repo/$_tuple_start"$'\n'"$_fdir/repo/$_fields_start" ]] &&
+        [[ "$rc" -eq 0 && "$(cat "$_started")" == "$_fdir/repo/$_veprs_tuple_start"$'\n'"$_fdir/repo/$_fields_start" ]] &&
             ok "a harness run that scores with VEP_OUTPUTS_COMPARATOR=python and a built VEP_FIELDS_COMPARATOR exported: the same two starts of the tree's comparators" ||
             bad "scoring harness run with the variables exported: expected rc=0 and the two tree comparators' starts, got rc=$rc '$(tail -2 "$_od/log")' and '$(cat "$_started")'"
         # The same cell by the harness of this tree, on the tree's own release builds: the

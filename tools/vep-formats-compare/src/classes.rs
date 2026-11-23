@@ -390,7 +390,9 @@ pub const UTRANNOTATOR_FRAMESHIFT_AT_STOP_BOUNDARY: &str =
 /// Where the candidate reports a lost stop the reference does not read (`:631`): the
 /// reference fills neither field or its `5UTR_consequence` is the lost start, the gained
 /// start or the frameshift, no group of a frameshift's list carrying the `KozakContext` and
-/// `KozakStrength` of a group of the candidate's; the `Allele`'s length is no multiple of
+/// `KozakStrength` of a group of the candidate's, unless that group's stop codon lies
+/// outside the listed ORF's frame and whole codons past a stop codon the insertion can be
+/// written inside (`lost_stop_of_another_orf`); the `Allele`'s length is no multiple of
 /// three; the row's `HGVS_OFFSET` is a whole number other than zero, so the same sequence
 /// can be written further on, inside the stop codon; and none of the seeded runs
 /// (`UtrannotatorSeedSweep`), where they are given, writes the lost stop on the row. Where
@@ -1476,7 +1478,8 @@ pub const STRUCTURAL_DELETION_STOP_LOST_WITHOUT_STOP_CODON: &str =
 /// `Amino_acids` ends on the unknown residue at the protein position after the whole
 /// codons. The candidate's `Amino_acids`, `Codons` and protein notation are the ones
 /// derived on the completed coding sequence. A deletion from the stop codon past the
-/// transcript's last base is derived with the reference bases of `--reference-fasta` alone.
+/// transcript's last base is derived with the reference bases of `--reference-fasta`, and
+/// at the record's own place without them.
 pub const STOP_CODON_COMPLETED_BY_POLYADENYLATION: &str = "stop_codon_completed_by_polyadenylation";
 /// `stop_codon_overlap_without_stop_codon`: Ensembl VEP reads the last three coding
 /// positions as the stop codon on every transcript without `cds_end_NF`

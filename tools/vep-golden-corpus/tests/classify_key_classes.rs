@@ -1747,14 +1747,15 @@ const COMPLETED: &str = "stop_codon_completed_by_polyadenylation";
 
 /// The ten coding bases of `SHOWN_MT` in the made-up cache, the last of them the first base
 /// of a stop codon that polyadenylation completes, and the three bases a made-up reference
-/// sequence holds after the transcript's last base.
+/// sequence holds after the transcript's last base, the third of them that coding base again.
 const SHOWN_MT_CODING: &str = "ATGGCTGGAT";
-const AFTER_SHOWN_MT: &str = "GGG";
+const AFTER_SHOWN_MT: &str = "GGT";
 
 /// The class `classify` names a deletion of the last coding base of `SHOWN_MT` and of the
 /// two bases after the transcript under, on a corpus that holds the made-up cache: Ensembl
-/// VEP reads an incomplete terminal codon and vep-rs a lost stop codon, which is the row
-/// derived only beside the reference bases after the transcript. `members` are the
+/// VEP reads an incomplete terminal codon and vep-rs a kept stop codon, since the deletion
+/// written one place on takes no coding base. That row is derived only beside the reference
+/// bases after the transcript: at the record's own place the stop codon is lost. `members` are the
 /// manifest's members after its records, `reference` is the place inside the corpus a
 /// reference sequence is written at, and `more` are the further arguments of the run.
 fn past_the_last_base_class(
@@ -1774,7 +1775,7 @@ fn past_the_last_base_class(
     };
     case.outputs(
         &on("incomplete_terminal_codon_variant,coding_sequence_variant"),
-        &on("stop_lost"),
+        &on("stop_retained_variant"),
     );
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../vep-outputs-compare/tests/fixtures/coding_ends/cache/transcripts/7");

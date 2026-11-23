@@ -1679,6 +1679,54 @@ fn with_its_record_the_class_refuses_a_term_an_insertion_after_one_base_does_not
     }
 }
 
+/// The kept base is an intron of one base: the insertion after it stands between the two
+/// bases of that intron's first site window, and the base read as changed draws nothing.
+#[test]
+fn with_its_record_the_class_takes_the_site_term_of_an_insertion_after_a_one_base_intron() {
+    let lone = "non_coding_transcript_variant";
+    for site in ["splice_acceptor_variant", "splice_donor_variant"] {
+        let candidate = format!("{lone},{site}");
+        let rows = (lone, candidate.as_str());
+        assert!(
+            past_the_span_record("T", "7:101000", "TGT", "-", rows),
+            "{site}"
+        );
+        assert!(
+            !past_the_span_record("T", "7:101000", "TGT", "3", rows),
+            "{site} on a base of the transcript's sequence"
+        );
+        assert!(
+            !past_the_span_record("T", "7:101000", "GGT", "-", rows),
+            "{site} under an allele that does not keep the base"
+        );
+    }
+    let refused = |reference: &str, candidate: &str| {
+        !past_the_span_record("T", "7:101000", "TGT", "-", (reference, candidate))
+    };
+    let site = "splice_acceptor_variant";
+    for term in INTRON_ROW_TERMS.iter().filter(|term| **term != site) {
+        let held = format!("{lone},{term}");
+        assert!(
+            refused(&held, &format!("{held},{site}")),
+            "a site term beside the reference's {term}"
+        );
+        assert!(
+            refused(&held, &format!("{lone},{site}")),
+            "a site term in place of the reference's {term}"
+        );
+        assert!(
+            refused(lone, &format!("{held},{site}")),
+            "a site term with {term}"
+        );
+    }
+    for beside in ["upstream_gene_variant", "downstream_gene_variant"] {
+        assert!(
+            refused(beside, &format!("{beside},{site}")),
+            "a site term on a row of {beside}"
+        );
+    }
+}
+
 /// The rows of `--terms display`: both site terms print one name, the fifth base, the
 /// donor region, the tract and `splice_region_variant` another, the intron term a third.
 #[test]

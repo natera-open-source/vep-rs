@@ -1835,7 +1835,7 @@ fn displayed_span_placement(
 /// The class on two rows printed under `--terms display`, or `None` where neither row holds
 /// a display name of the seven (`DISPLAY_ROW_TERMS`). The rows' other terms are equal and
 /// their names of the seven differ; vep-rs's row alone does not hold the name of the donor
-/// and the acceptor term, as it alone holds neither term under the Sequence Ontology names;
+/// and the acceptor term, so its site term at an intron of one base stays a difference here;
 /// the record's alleles show a longer alternate allele that is no pure insertion, as under
 /// those names, and a place of one intron gives both rows' names
 /// (`displayed_span_placement`). Where the allele is not written after its span, the
@@ -1922,7 +1922,10 @@ fn display_vocabulary_pair(
 /// either. The reference does not compare the two alleles (:418) and reads the one base as
 /// changed (:452-454), so its terms are those of that base, and vep-rs's those of the
 /// insertion after it (`insertion_after_one_base`): on its row the reference alone may hold
-/// `splice_region_variant` as well.
+/// `splice_region_variant` as well. Where the reference's row holds none of the seven and is
+/// no row beside the transcript, vep-rs's may alone hold the donor or the acceptor term: the
+/// base is an intron of one base, and both engines write that term for the same insertion
+/// written as a record of one alternate allele.
 ///
 /// With the record's alleles (`PairRow::reference`) the two rows are those of a longer
 /// alternate allele that is no pure insertion, both alleles holding more than one base or
@@ -1998,8 +2001,22 @@ pub fn splice_term_past_the_record_span_pair_at(
     let after_one_base = reference
         .as_ref()
         .is_some_and(|reference| insertion_after_one_base(reference, &allele));
+    // An intron of one base that is the kept base: the window of its first two bases holds it
+    // and the exon base after it, so the insertion draws a site term
+    // (BaseTranscriptVariationAllele.pm:176-178) where the base, read as changed inside a
+    // frameshift intron, draws none of the seven (:171-174). No other place gives such rows.
+    let beside_the_transcript = ["upstream_gene_variant", "downstream_gene_variant"];
+    let site =
+        if after_one_base && expected == 0 && other.is_disjoint(&beside_the_transcript.into()) {
+            DONOR | ACCEPTOR
+        } else {
+            0
+        };
     let (may_come, differ) = if written_after_the_span(e, a) {
-        (REGION | DONOR_REGION | TRACT | INTRON, gone | come != 0)
+        (
+            REGION | DONOR_REGION | TRACT | INTRON | site,
+            gone | come != 0,
+        )
     } else {
         (REGION | DONOR_REGION, gone != 0)
     };
@@ -3958,6 +3975,54 @@ mod tests {
             assert!(
                 !past_the_span_record("T", "7:101000", "TGTG", cdna, (reference, candidate)),
                 "{shape}"
+            );
+        }
+    }
+
+    /// The kept base is an intron of one base: the insertion after it stands between the two
+    /// bases of that intron's first site window, and the base read as changed draws nothing.
+    #[test]
+    fn with_its_record_the_class_takes_the_site_term_of_an_insertion_after_a_one_base_intron() {
+        let lone = "non_coding_transcript_variant";
+        for site in ["splice_acceptor_variant", "splice_donor_variant"] {
+            let candidate = format!("{lone},{site}");
+            let rows = (lone, candidate.as_str());
+            assert!(
+                past_the_span_record("T", "7:101000", "TGT", "-", rows),
+                "{site}"
+            );
+            assert!(
+                !past_the_span_record("T", "7:101000", "TGT", "3", rows),
+                "{site} on a base of the transcript's sequence"
+            );
+            assert!(
+                !past_the_span_record("T", "7:101000", "GGT", "-", rows),
+                "{site} under an allele that does not keep the base"
+            );
+        }
+        let refused = |reference: &str, candidate: &str| {
+            !past_the_span_record("T", "7:101000", "TGT", "-", (reference, candidate))
+        };
+        let site = "splice_acceptor_variant";
+        for term in INTRON_ROW_TERMS.iter().filter(|term| **term != site) {
+            let held = format!("{lone},{term}");
+            assert!(
+                refused(&held, &format!("{held},{site}")),
+                "a site term beside the reference's {term}"
+            );
+            assert!(
+                refused(&held, &format!("{lone},{site}")),
+                "a site term in place of the reference's {term}"
+            );
+            assert!(
+                refused(lone, &format!("{held},{site}")),
+                "a site term with {term}"
+            );
+        }
+        for beside in ["upstream_gene_variant", "downstream_gene_variant"] {
+            assert!(
+                refused(beside, &format!("{beside},{site}")),
+                "a site term on a row of {beside}"
             );
         }
     }

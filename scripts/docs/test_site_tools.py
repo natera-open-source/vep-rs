@@ -1654,6 +1654,8 @@ HOME_NOTE = "Measured on made-up machines."
 RELEASED_TOOL = ("vep-rs", "vep-rs", RELEASE)
 COMPARATOR_TOOL = ("fastvep", "fastVEP", "v9.8.7")
 REFERENCE_TOOL = ("ensembl-vep", "Ensembl VEP", "100.1")
+# The page's sentence on a reference whose wall time stands at another version, here at 100.0.
+HOME_TIMED = "Ensembl VEP's wall times are Ensembl VEP 100.0's figures, carried forward from the earlier reference generation."
 PANEL_A = "raw F1 per dataset"
 PANEL_B = "wall time per dataset and architecture"
 PANEL_C = "raw F1 per plugin"
@@ -1719,8 +1721,9 @@ def home_plugins(read, release=RELEASE):
 def home_values(tools=(RELEASED_TOOL, COMPARATOR_TOOL, REFERENCE_TOOL), notes=(HOME_NOTE,), panels="abcd", image=HOME_IMAGE,
                 panel_notes=None):
     """The values file of a release figure under every key the figure script writes: its tools as (id, name,
-    version), its notes, its panel ids and, for each panel id of `panel_notes`, that panel's note, beside the
-    caption and the alternative text of the README, which the page does not copy."""
+    version) and, for a tool whose wall time stands at another version, that version as a fourth item, its
+    notes, its panel ids and, for each panel id of `panel_notes`, that panel's note, beside the caption and the
+    alternative text of the README, which the page does not copy."""
     panel_notes = panel_notes or {}
     return {
         "image": image,
@@ -1729,7 +1732,10 @@ def home_values(tools=(RELEASED_TOOL, COMPARATOR_TOOL, REFERENCE_TOOL), notes=(H
         "caption": "The caption the README shows.",
         "notes": list(notes),
         "sources": [],
-        "tools": [{"id": tool_id, "name": name, "version": version, "colour": "#000000"} for tool_id, name, version in tools],
+        "tools": [
+            {"id": tool_id, "name": name, "version": version} | ({"wall_time_version": timed[0]} if timed else {}) | {"colour": "#000000"}
+            for tool_id, name, version, *timed in tools
+        ],
         "records": [],
         "panels": [
             {"id": panel, "title": f"Panel {panel}", "groups": []} | ({"note": panel_notes[panel]} if panel in panel_notes else {})
@@ -1738,12 +1744,13 @@ def home_values(tools=(RELEASED_TOOL, COMPARATOR_TOOL, REFERENCE_TOOL), notes=(H
     }
 
 
-def figure_tree(tmp_path, genomes=False):
+def figure_tree(tmp_path, genomes=False, timed_apart=False):
     """A made-up tree of one release whose records the figure script and the page's script both read, with the
     figure's pair: the values file as the figure script's values layer writes it from those records, and made-up
     image bytes beside it. With `genomes` the release record holds the block of the caches checked, which gives
-    the figure its fifth panel. Returns the tree and the values file's document."""
-    made_up = figure_records.with_genomes() if genomes else figure_records.record_set()
+    the figure its fifth panel; with `timed_apart` the timing records name the reference at another version
+    than its concordance records. Returns the tree and the values file's document."""
+    made_up = figure_records.with_genomes() if genomes else figure_records.record_set(**(figure_records.timed_at() if timed_apart else {}))
     records = json.loads(json.dumps(made_up).replace('"pop_a"', '"gnomad_v4.1_genomes"'))
     for record in records.values():
         if record.get("record") == "population-measurements":
@@ -1986,10 +1993,15 @@ def test_the_reference_release_is_the_image_tag_without_its_prefix(tmp_path):
             ),
             "On \\*one\\* machine \\[made up\\]. vep-rs v1.2.3 against Ensembl VEP 100.1, with fast\\_VEP\\* v9.8.7 as comparator.",
         ),
+        (
+            {"tools": (RELEASED_TOOL, COMPARATOR_TOOL, (*REFERENCE_TOOL, "100.0"))},
+            f"{HOME_NOTE} Four panels comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {FOUR_PANELS}. {HOME_TIMED}",
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator. {HOME_TIMED}",
+        ),
     ],
     ids=[
         "one-comparator", "no-comparator", "no-notes", "two-notes", "panel-notes-after-the-notes", "one-panel",
-        "panels-in-the-file-order", "five-panels", "markup-escaped",
+        "panels-in-the-file-order", "five-panels", "markup-escaped", "reference-timed-at-another-version",
     ],
 )
 def test_the_figure_block_is_composed_from_the_values_file(tmp_path, values, alt, caption):
@@ -2030,6 +2042,29 @@ def test_the_page_counts_five_panels_from_a_values_file_whose_release_record_hol
     for panel_id, clause in zip("abcde", (PANEL_A, PANEL_B, PANEL_C, PANEL_D, PANEL_E)):
         assert f" ({panel_id}) {clause[0].upper()}{clause[1:]}" in document["caption"]
     assert PANEL_E == figure.GENOMES_CLAUSE and not any(tool["name"] in PANEL_E for tool in document["tools"] if tool["id"] != "ensembl-vep")
+
+
+def test_the_page_names_the_version_the_references_wall_time_stands_at_in_the_figure_scripts_words(tmp_path):
+    repo, document = figure_tree(tmp_path, timed_apart=True)
+    released, comparator, reference = (f"{tool['name']} {tool['version']}" for tool in document["tools"])
+    stated = document["tools"][2]["wall_time_version"]
+    assert stated == figure_records.TIMED_VERSION != document["tools"][2]["version"]
+    timed = f"Ensembl VEP's wall times are Ensembl VEP {stated}'s figures, carried forward from the earlier reference generation."
+    note = next(panel["note"] for panel in document["panels"] if panel["id"] == "d")
+    lead = f"{released} against {reference}, with {comparator} as comparator. {timed}"
+    alt = f"{note} Four panels comparing {released} and {comparator} against {reference}: {FOUR_PANELS}. {timed}"
+    assert home_page(repo).split("\n\n")[3:9] == [*figure_paragraphs(alt, f"{note} {lead}"), "## Why vep-rs"]
+    # The page's sentence is the first of the two the figure script writes after the wall-time panel's part of
+    # its caption and of its alternative text, and the page's lead names the version of the second.
+    for text in (document["caption"], document["alt_text"]):
+        assert text.count(f". {timed} The concordance panels compare against {reference}'s output. (c) ") == 1
+    _, parts, places, _ = home_build(repo)
+    assert parts["timed-apart"] is True
+    assert places["reference-timed"][:3] == (f"Ensembl VEP {stated}", HOME_VALUES, "tools, by the role of each id in comparators.tsv: wall_time_version")
+    # The same records at one version give no such sentence: the part is left out with its place.
+    same, _ = figure_tree(tmp_path / "same")
+    _, parts, places, _ = home_build(same)
+    assert parts["timed-apart"] is False and places["reference-timed"] is None and "wall times are" not in home_page(same)
 
 
 def test_two_comparators_are_named_together_in_the_figure_block(tmp_path):
@@ -2208,6 +2243,7 @@ def test_values_prints_each_filled_place_with_its_file_and_key_and_writes_nothin
         "if figure": ["holds", "", ""],
         "if one-comparator": ["holds", "", ""],
         "if several-comparators": ["left out", "", ""],
+        "if timed-apart": ["left out", "", ""],
         "speed-up": ["30", population, f"{seconds.format('ensembl_vep')} / {seconds.format('vep_rs')}"],
         "gnomad-label": ["Cohort A v7", population, "datasets[dataset=gnomad_v4.1_genomes].label"],
         "gnomad-variants": ["4,321,987", population, "datasets[dataset=gnomad_v4.1_genomes].variants"],
@@ -2229,7 +2265,7 @@ def test_values_prints_each_filled_place_with_its_file_and_key_and_writes_nothin
 def test_values_prints_no_row_for_a_place_the_tree_leaves_out(capsys, tmp_path):
     home.main(["--repo", str(home_tree(tmp_path)), "--values"])
     assert [line.split("\t")[0] for line in capsys.readouterr().out.splitlines()[1:]] == [
-        "if plugins", "if figure", "if one-comparator", "if several-comparators",
+        "if plugins", "if figure", "if one-comparator", "if several-comparators", "if timed-apart",
         "speed-up", "gnomad-label", "gnomad-variants", "gnomad-arm-seconds", "reference-release", "whole-genome-datasets",
     ]
 

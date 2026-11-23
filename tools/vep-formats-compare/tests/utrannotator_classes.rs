@@ -2559,12 +2559,32 @@ fn written_further_on() -> [Written; 3] {
     ]
 }
 
+/// The reference's frameshift list of `row` with the `KozakContext` and `KozakStrength` of
+/// the candidate's group in place of its own.
+fn listed_under_the_candidates_kozak_pair(row: &Written) -> String {
+    let pair = |annotation: &str, key: &str| {
+        annotation
+            .split(':')
+            .find(|pair| pair.starts_with(key))
+            .expect("the annotation names the key")
+            .to_string()
+    };
+    ["KozakContext=", "KozakStrength="]
+        .iter()
+        .fold(row.reference.1.clone(), |listed, key| {
+            listed.replace(&pair(&row.reference.1, key), &pair(&row.candidate.1, key))
+        })
+}
+
 /// The candidate reports the lost stop of an ORF on an insertion written at or before the
 /// stop codon's first base, where the reference reads no stop codon: the row is the
 /// class's, with both fields, beside a reference that reports nothing, the lost start, the
 /// gained start or the frameshift of other ORFs, where the allele's length is no multiple
 /// of three and the row's `HGVS_OFFSET` is not zero. Seeded runs that write the
-/// reference's own terms on the row change nothing.
+/// reference's own terms on the row change nothing. A frameshift's list may hold an ORF
+/// with the Kozak pair of the candidate's group where the candidate's stop codon lies
+/// outside that ORF's frame, whole codons past a stop codon the insertion can be written
+/// directly before and inside.
 #[test]
 fn the_lost_stop_written_before_stop_codon_takes_a_lost_stop_the_reference_does_not_read() {
     let rows = written_further_on();
@@ -2599,15 +2619,40 @@ fn the_lost_stop_written_before_stop_codon_takes_a_lost_stop_the_reference_does_
     };
     let (reference, candidate) = gained_start.texts();
     assert!(before_stop(&reference, &candidate).is("green", &[(UTR_BEFORE_STOP, 1)]));
+    // The reference lists two shifted ORFs that share a stop codon, one of them with the
+    // Kozak pair of the candidate's group, and the candidate reports the lost stop of a
+    // third ORF. Its stop codon lies outside the listed ORF's frame, thirteen codons past
+    // the stop codon that begins 108 bases before the coding start, which the record is
+    // written directly before or, under an offset of two, one base before.
+    let [_, _, third] = written_further_on();
+    let beside = listed_under_the_candidates_kozak_pair(&third)
+        .replace("ref_StartDistanceToCDS=127", "ref_StartDistanceToCDS=133")
+        .replace("ref_type_length=36", "ref_type_length=42")
+        .replace("alt_type_length=27", "alt_type_length=33");
+    let listed = values(UTR_FRAMESHIFT, &format!("{},{beside}", third.reference.1));
+    for offset in [-1, -2] {
+        let third_orf = Written {
+            reference: listed.clone(),
+            offset: Some(offset),
+            ..written_further_on().into_iter().nth(2).expect("a row")
+        };
+        let (reference, candidate) = third_orf.texts();
+        assert!(
+            before_stop(&reference, &candidate).is("green", &[(UTR_BEFORE_STOP, 1)]),
+            "{offset}"
+        );
+    }
 }
 
 /// A lost stop the candidate alone reports stays a difference where a seeded run writes the
 /// lost stop on the row, where the allele's length is a multiple of three, where the row
 /// carries no `HGVS_OFFSET` or a zero, beside a reference that reports the gained stop or
-/// an annotation beside no term, beside a frameshift whose list carries the Kozak pairs of
-/// the candidate's ORF with another stop codon, where a group of the candidate's states no
-/// `KozakStrength`, on a candidate's row without the plugin's counts, and under a record
-/// whose reference allele is not empty.
+/// an annotation beside no term, beside a frameshift whose list carries the Kozak pair of
+/// the candidate's ORF where the candidate's stop codon lies in the listed ORF's frame, no
+/// whole number of codons past the insertion or at the bases read in place of the lost
+/// stop codon, where a group of the candidate's states no `KozakStrength`, on a
+/// candidate's row without the plugin's counts, and under a record whose reference allele
+/// is not empty.
 #[test]
 fn the_lost_stop_written_before_stop_codon_refuses_a_lost_stop_a_run_writes_or_no_later_writing_explains(
 ) {
@@ -2622,7 +2667,7 @@ fn the_lost_stop_written_before_stop_codon_refuses_a_lost_stop_a_run_writes_or_n
         &[UTR_BEFORE_STOP],
     );
     assert!(outcome.is("red", &[]));
-    let rows: [(&str, Written); 8] = [
+    let rows: [(&str, Written); 10] = [
         (
             "an allele of three bases",
             Written {
@@ -2669,15 +2714,46 @@ fn the_lost_stop_written_before_stop_codon_refuses_a_lost_stop_a_run_writes_or_n
             },
         ),
         (
-            "a listed ORF of the candidate's Kozak pairs",
+            "a listed ORF of the candidate's Kozak pair, the stop codon in its frame",
             Written {
                 reference: values(
                     UTR_FRAMESHIFT,
+                    &listed_under_the_candidates_kozak_pair(&third)
+                        .replace("ref_StartDistanceToCDS=127", "ref_StartDistanceToCDS=126"),
+                ),
+                ..written_further_on().into_iter().nth(2).expect("a row")
+            },
+        ),
+        (
+            "a listed ORF of the candidate's Kozak pair, the stop codon no whole codons on",
+            Written {
+                reference: values(
+                    UTR_FRAMESHIFT,
+                    &listed_under_the_candidates_kozak_pair(&third),
+                ),
+                candidate: values(
+                    UTR_STOP_LOSS,
                     &third
-                        .reference
+                        .candidate
                         .1
-                        .replace("KozakContext=ACAATGT", "KozakContext=TTGATGT")
-                        .replace("KozakStrength=Moderate", "KozakStrength=Weak"),
+                        .replace("AltStopDistanceToCDS=74", "AltStopDistanceToCDS=73"),
+                ),
+                ..written_further_on().into_iter().nth(2).expect("a row")
+            },
+        ),
+        (
+            "a listed ORF of the candidate's Kozak pair, the stop codon at the bases read in place",
+            Written {
+                reference: values(
+                    UTR_FRAMESHIFT,
+                    &listed_under_the_candidates_kozak_pair(&third),
+                ),
+                candidate: values(
+                    UTR_STOP_LOSS,
+                    &third
+                        .candidate
+                        .1
+                        .replace("AltStopDistanceToCDS=74", "AltStopDistanceToCDS=113"),
                 ),
                 ..written_further_on().into_iter().nth(2).expect("a row")
             },

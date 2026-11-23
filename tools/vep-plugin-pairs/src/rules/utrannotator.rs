@@ -1135,13 +1135,45 @@ fn lost_stop_of_shifted_orfs(e: &Entry, lost: &[Frame]) -> bool {
     true
 }
 
+/// Whether the engine's lost-stop group `group` is of another upstream ORF than the
+/// shifted ORF `frame` of the reference's list, whose start codon carries the same
+/// `KozakContext` and `KozakStrength`. An ORF meets its next stop codon in its own frame,
+/// and in the mutated UTR the listed ORF's start stands the allele's length further from
+/// the coding start than its `ref_StartDistanceToCDS`. Two things hold of another ORF's
+/// group. Its `AltStopDistanceToCDS` lies no whole number of codons past the listed ORF's
+/// start. And it lies one codon or more, in whole codons, past the three bases read in
+/// place of a stop codon that the insertion can be written directly before and inside
+/// (UTRAnnotator.pm:639). Such a stop codon begins at the base after the record's own point
+/// (`utr_base_after_insertion`) or at one nearer the coding start by less than the size of
+/// `HGVS_OFFSET`, and the bases read in its place begin the allele's length further from
+/// the coding start.
+fn lost_stop_of_another_orf(e: &Entry, group: &Frame, frame: &Frame) -> bool {
+    let length = e.allele.chars().count() as i128;
+    let stop = digits_value(value_of(group, "AltStopDistanceToCDS").unwrap_or(ABSENT));
+    let start = digits_value(value_of(frame, "ref_StartDistanceToCDS").unwrap_or(ABSENT));
+    let (Some(stop), Some(start), Some(after), Some(shift)) =
+        (stop, start, utr_base_after_insertion(e), hgvs_shift(e))
+    else {
+        return false;
+    };
+    let past = |from: i128| from.checked_add(length)?.checked_sub(stop);
+    past(start).is_some_and(|bases| bases % 3 != 0)
+        && (0..shift.min(3)).any(|nearer| {
+            after
+                .checked_sub(nearer)
+                .and_then(past)
+                .is_some_and(|bases| bases >= 3 && bases % 3 == 0)
+        })
+}
+
 /// Whether the reference's entry leaves the lost stop of the engine's groups `lost` unread
 /// on a record written at or before a stop codon's first base: UTRAnnotator.pm:631-633
 /// pass over the stop codon of such a record, though the same mutated sequence can be
 /// written inside the stop codon. The reference fills neither field or reports the lost
 /// start, the gained start or the frameshift, the frameshift with no group that carries
-/// the `KozakContext` and `KozakStrength` of a group of the engine's
-/// (`lost_stop_of_shifted_orfs` reads that row); the engine lists a group, and each of
+/// the `KozakContext` and `KozakStrength` of a group of the engine's unless that group is
+/// another ORF's (`lost_stop_of_another_orf`; `lost_stop_of_shifted_orfs` reads the row
+/// of a listed ORF); the engine lists a group, and each of
 /// its groups carries both keys. The allele's length is no multiple of three, so the ORF
 /// does not end on the stop codon that stands whole after the inserted bases; the row's
 /// `HGVS_OFFSET` is a whole number other than zero, so the sequence can be written further
@@ -1162,9 +1194,11 @@ fn lost_stop_written_further_on(
     let annotation = field_of(e, &ANNOTATION_FIELDS);
     let unread = if term == FRAMESHIFT_TERM {
         annotation_frames(annotation).is_some_and(|shifted| {
-            !shifted
-                .iter()
-                .any(|frame| lost.iter().any(|group| kozak(group) == kozak(frame)))
+            !shifted.iter().any(|frame| {
+                lost.iter().any(|group| {
+                    kozak(group) == kozak(frame) && !lost_stop_of_another_orf(e, group, frame)
+                })
+            })
         })
     } else if blank(term) {
         blank(annotation)

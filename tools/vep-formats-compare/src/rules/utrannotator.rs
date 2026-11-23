@@ -1274,12 +1274,44 @@ fn lost_stop_of_listed_orfs(e: &Entry, a: &Entry) -> bool {
     true
 }
 
+/// Whether the candidate's lost-stop group `group` is of another upstream ORF than the
+/// shifted ORF `frame` of the reference's list, whose start codon carries the same
+/// `KozakContext` and `KozakStrength`. An ORF meets its next stop codon in its own frame,
+/// and in the mutated UTR the listed ORF's start stands the allele's length further from
+/// the coding start than its `ref_StartDistanceToCDS`. Two things hold of another ORF's
+/// group. Its `AltStopDistanceToCDS` lies no whole number of codons past the listed ORF's
+/// start. And it lies one codon or more, in whole codons, past the three bases read in
+/// place of a stop codon that the insertion can be written directly before and inside
+/// (UTRAnnotator.pm:639). Such a stop codon begins at the base after the record's own point
+/// (`utr_base_after_insertion`) or at one nearer the coding start by less than the size of
+/// `HGVS_OFFSET`, and the bases read in its place begin the allele's length further from
+/// the coding start.
+fn lost_stop_of_another_orf(e: &Entry, group: &Fields, frame: &Fields) -> bool {
+    let stop = frame_item(group, "AltStopDistanceToCDS").unwrap_or(ABSENT);
+    let start = frame_item(frame, "ref_StartDistanceToCDS").unwrap_or(ABSENT);
+    let (true, true, Some(after)) = (
+        pyfmt::is_digit(stop),
+        pyfmt::is_digit(start),
+        utr_base_after_insertion(e),
+    ) else {
+        return false;
+    };
+    let length = pyfmt::len(&e.allele) as i128;
+    let past = |from: i128| from + length - i128::from(whole_number(stop));
+    past(i128::from(whole_number(start))) % 3 != 0
+        && (0..offset_size(e).min(3)).any(|nearer| {
+            let bases = past(i128::from(after) - nearer);
+            bases >= 3 && bases % 3 == 0
+        })
+}
+
 /// Whether the candidate's entry `a` reports a lost stop that the reference's entry `e`,
 /// written at or before the stop codon's first base, does not read (UTRAnnotator.pm:631).
 /// The reference fills neither field or its `5UTR_consequence` is the lost start, the
 /// gained start or the frameshift, and no group of a frameshift's list carries the
-/// `KozakContext` and `KozakStrength` of a group of the candidate's
-/// (`lost_stop_of_listed_orfs` holds that row). The allele's length is no multiple of
+/// `KozakContext` and `KozakStrength` of a group of the candidate's unless that group is
+/// another ORF's (`lost_stop_of_another_orf`; `lost_stop_of_listed_orfs` holds the row of
+/// a listed ORF). The allele's length is no multiple of
 /// three, so no writing leaves the ORF its frame, and the row's `HGVS_OFFSET` is a whole
 /// number other than zero: the same sequence can be written further on, inside the stop
 /// codon. Each group of the candidate's `5UTR_annotation` names an ORF by its
@@ -1320,11 +1352,11 @@ fn lost_stop_written_further_on(
         let Some(shifted) = annotation_frames(&annotation_of(e)) else {
             return false;
         };
-        if shifted
-            .iter()
-            .filter_map(kozak)
-            .any(|pair| named.contains(&pair))
-        {
+        if shifted.iter().any(|frame| {
+            lost.iter().any(|group| {
+                kozak(group) == kozak(frame) && !lost_stop_of_another_orf(e, group, frame)
+            })
+        }) {
             return false;
         }
     }

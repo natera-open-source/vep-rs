@@ -116,7 +116,7 @@ Counts:
 
 - ClinVar GRCh37: 440 pairs; ClinVar GRCh38: 1,994 pairs, every one of that shape.
 - On 10 of the GRCh37 pairs and 81 of the GRCh38 pairs the record's span holds a base of an intron's splice acceptor site at a position where its two alleles hold the same base. No differing region reaches that site, so neither engine writes `splice_acceptor_variant` on those rows. Were the span read as one region, both engines would write it, and neither would write `splice_region_variant`, which Ensembl VEP's predicate withholds beside an acceptor term (`Utils/VariationEffect.pm`, lines 620-624).
-- gnomAD and 1000 Genomes datasets: none.
+- gnomAD v4.1, whole genome: 1 pair; gnomAD v2.1.1, whole genome: 1 pair; 1000 Genomes Phase 3, whole genome: 7 pairs; 1000 Genomes high-coverage, whole genome: none.
 - Structural-variant sets: 20 pairs (class 2).
 
 The SNP/indel comparator's summary groups every splice-family pair into descriptive buckets for reporting. The buckets do not decide exclusion; this rule does, and the summary prints beside each bucket how many of its pairs the rule excluded.

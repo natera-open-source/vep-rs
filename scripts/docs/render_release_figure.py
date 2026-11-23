@@ -17,7 +17,11 @@ Tools. `comparators.tsv` beside this script lists the tools, one row each: `id`,
 under), `colour_slot`, `concordance_panel` and `speed_panel` (`yes` or `no`) and
 `headline_extra_args` (the extra arguments of the run a panel reads when the records hold more than
 one run of the tool; `-` for none). A tool appears where its row allows it and a record holds its
-figure. Each tool's version is the one the records state, and one tool at two versions is refused.
+figure. Each tool's version is the one the records state, and one tool at two versions is refused,
+with one case apart: the reference's concordance is drawn at the one version the release record's
+`perl_reference`, the block `genome_checks` and the plugin record name for it, and its wall time at
+the one version the timing records name (the population record's `wall_time` block and a wall-time
+record's `engines` block), where the two differ.
 
 Panels. (a) Raw F1 per dataset on an axis logarithmic in 1 - F1 and reversed, one bar per tool from
 the plot's left edge, with a tool's adjusted F1 as a marker: the genome-wide ClinVar datasets (the
@@ -142,7 +146,11 @@ population datasets a tool's rows sum beside ClinVar, assembly by assembly and e
 population record labels it, every row of the tool that covers fewer with what it covers, and a
 tool whose rows cover ClinVar alone; the sentence has its key among the values file's `sources`.
 No panel names a version: the legend alone names
-each tool with the version its records state. An F1 axis is labelled F1 against the reference, and
+each tool with the version its records state, and a reference whose wall time stands at another
+version than its concordance with that version beside it. Of such a reference both texts say, after
+the wall-time panel's part, at which version its wall times stand and against which version's
+output the concordance panels compare, each version with its records and keys among the values
+file's `sources`. An F1 axis is labelled F1 against the reference, and
 the legend says that a bar is the raw F1. Both texts also say, from the record's own counts and
 each with its key among the values file's `sources`, what the image leaves unsaid: the row names of
 the plugin panel where they are more than its plugins, the rows on which the tools' figures are
@@ -166,7 +174,9 @@ Two layers. The values layer uses the standard library alone and writes the valu
 `canvas`, `alt_text`, `caption`, `notes` (the lines drawn inside the image that are no panel's),
 `sources` (each figure or sentence of the two texts and of a note that no panel's value holds, as
 `text` with the `record` and `key` it is drawn from; one whose record holds no such key is left out
-of the texts), `tools`, `records` (each file with its digest) and `panels` (each `id`, `title`,
+of the texts), `tools` (each `id`, `name`, `version` and `colour`, and `wall_time_version` for a
+reference whose wall time stands at another version), `records` (each file with its digest) and
+`panels` (each `id`, `title`,
 `groups` of `label` and `rows` and, where a line is drawn under the panel, its `note`; a row has
 `label` and `values`, each value `tool`, `kind` (`bar`, `marker` or `text`), `value`, `record` and
 `key`, and an F1 its `counts`: matched, reference and tool; a value that draws on two records names
@@ -340,6 +350,13 @@ PLACE_SENTENCE = (
 # its whole dataset on one architecture, and a population dataset's cells are the parts its sum adds up.
 SUMMED_PARTS = "its dataset's separately timed parts"
 RUNS_SUBJECT = "each dataset, or each separately timed part of one,"
+# The two sentences of the caption and of the alternative text on a reference whose wall time stands at another
+# version than its concordance: `{timed}` and `{scored}` are the reference's name with each version, and the
+# second sentence opens with the F1 panels by their number. The legend's entry of such a reference follows.
+TIMED_APART = "{reference}'s wall times are {timed}'s figures, carried forward from the earlier reference generation."
+SCORED_APART = "{panels} against {scored}'s output."
+SCORED_PANELS = ("The concordance panel compares", "The concordance panels compare")
+TIMED_LEGEND = "{label} (wall time: {version})"
 # The one sentence of the caption and of the alternative text on a marker without a line from its bar:
 # the line's length is the distance between the places of the two figures.
 AGREE_SENTENCE = "A marker standing at the end of its bar means that the tool's raw and adjusted F1 are equal as drawn."
@@ -712,6 +729,8 @@ class Reader:
         self.released = next(tool for tool in tools if tool["role"] == "released")
         self.reference = next(tool for tool in tools if tool["role"] == "reference")
         self.versions: dict[str, list[str]] = {}
+        self.scored: dict[str, list[str]] = {}
+        self.timed: dict[str, list[tuple[str, str, str]]] = {}
         self.drawn: set[str] = set()
         self.printed: list[str] = []
         self.unadjusted: list[str] = []
@@ -740,15 +759,34 @@ class Reader:
         if (stated, record["file"], key) not in self.runs.setdefault(tool["id"], []):
             self.runs[tool["id"]].append((stated, record["file"], key))
 
-    def version(self, tool: dict, version, where: str) -> None:
+    def version(self, tool: dict, version, where: str, timed: tuple[dict, str] | None = None) -> None:
         """Record a version a record states for `tool`: a reference's without its `release_` prefix, any
-        other tool's behind one `v`."""
+        other tool's behind one `v`. `timed` is the record and the key of a version stated for the tool's
+        wall time, which is kept with them; any other version is one the tool is scored at or against."""
         if not isinstance(version, str) or not version:
             fail(f"{where} states no version of {tool['name']}")
         text = version_text(tool, version)
         seen = self.versions.setdefault(tool["id"], [])
         if text not in seen:
             seen.append(text)
+        if timed is not None:
+            self.timed.setdefault(tool["id"], []).append((text, timed[0]["file"], timed[1]))
+        elif text not in self.scored.setdefault(tool["id"], []):
+            self.scored[tool["id"]].append(text)
+
+    def timed_versions(self, tool: dict) -> list[str]:
+        """The versions the timing records state for a tool's wall time, each once, in the order read."""
+        return list(dict.fromkeys(version for version, _, _ in self.timed.get(tool["id"], [])))
+
+    def apart(self, tool: dict) -> tuple[str, str] | None:
+        """Of a reference whose records name one version for its concordance and one other version for its
+        wall time, the two, the concordance's first; None for any other tool and any other set of versions.
+        The concordance's version is one the release record's `perl_reference` names, the block whose keys the
+        texts keep it with: None where that block names no version."""
+        if tool["role"] != "reference" or not self.chosen["release"]["data"].get("perl_reference"):
+            return None
+        scored, timed = self.scored.get(tool["id"], []), self.timed_versions(tool)
+        return (scored[0], timed[0]) if len(scored) == 1 and len(timed) == 1 and scored != timed else None
 
     def value(self, tool: dict, kind: str, text: str, record: dict, key: str, counts: list[int] | None = None) -> dict:
         """One value of a row; an F1 carries the integer counts it is computed from as (matched, reference,
@@ -796,8 +834,10 @@ class Reader:
         return text
 
     def label(self, tool: dict) -> str:
-        """A tool's name and the version, or versions, its records state."""
-        return f"{tool['name']} {' and '.join(self.versions[tool['id']])}"
+        """A tool's name and the version, or versions, its records state; a reference whose wall time stands
+        at another version than its concordance is named with the version of its concordance."""
+        apart = self.apart(tool)
+        return f"{tool['name']} {apart[0] if apart else ' and '.join(self.versions[tool['id']])}"
 
 
 def concordance_tools(reader: Reader) -> list[dict]:
@@ -806,7 +846,10 @@ def concordance_tools(reader: Reader) -> list[dict]:
 
 def read_versions(reader: Reader) -> None:
     """Every version the records state for a tool, in panel order; a block naming an engine the registry does
-    not list is noted and left out."""
+    not list is noted and left out. Outside a draft one tool at two versions is refused by name, but for a
+    reference whose concordance records name one version and whose timing records name one other: two versions
+    of its concordance, and two of its wall time across the timing records, are each refused as such, and so is
+    a version of its concordance that the release record's `perl_reference` does not name."""
     chosen = reader.chosen
     release, population = chosen["release"], chosen["population"]
     reader.version(reader.released, release["data"].get("release"), release["file"])
@@ -827,14 +870,16 @@ def read_versions(reader: Reader) -> None:
         if tool is None:
             reader.note(f"note: {population['file']} times {key}, which the registry does not list; the figure omits it")
         else:
-            reader.version(tool, block.get("engine_version") if isinstance(block, dict) else None, f"{population['file']} wall_time.{key}")
+            reader.version(tool, block.get("engine_version") if isinstance(block, dict) else None, f"{population['file']} wall_time.{key}",
+                           (population, f"wall_time.{key}.engine_version"))
     for record in {id(r): r for r in chosen["walltime"].values()}.values():
         for key, block in block_of(record["data"], "engines", record["file"]).items():
             tool = tool_of(reader.tools, key)
             if tool is None:
                 reader.note(f"note: {record['file']} times {key}, which the registry does not list; the figure omits it")
             else:
-                reader.version(tool, block.get("version") if isinstance(block, dict) else None, f"{record['file']} engines.{key}")
+                reader.version(tool, block.get("version") if isinstance(block, dict) else None, f"{record['file']} engines.{key}",
+                               (record, f"engines.{key}.version"))
     plugins = chosen["plugins"]
     if plugins is not None:
         for index, block in enumerate(block_of(plugins["data"], "engines", plugins["file"], list)):
@@ -849,8 +894,20 @@ def read_versions(reader: Reader) -> None:
     if not reader.draft:
         for tool in reader.tools:
             versions = reader.versions.get(tool["id"], [])
-            if len(versions) > 1:
+            if len(versions) < 2 or reader.apart(tool):
+                continue
+            if tool["role"] != "reference":
                 fail(f"the records name {tool['name']} at {and_list(versions)}; a tool is drawn at one version, and --draft draws a marked draft")
+            scored = reader.scored.get(tool["id"], [])
+            if len(scored) > 1:
+                fail(f"the records name {tool['name']}'s output at {and_list(scored)}; its concordance is drawn at one version, and --draft draws a marked draft")
+            timed = reader.timed_versions(tool)
+            if len(timed) > 1:
+                fail(f"the records time {tool['name']} at {and_list(timed)}; its wall time is drawn at one version, and --draft draws a marked draft")
+            fail(
+                f"the records name {tool['name']}'s output at {scored[0]} and time it at {timed[0]}, and {release['file']} perl_reference names no "
+                "version; its concordance is drawn at the version perl_reference names, and --draft draws a marked draft"
+            )
 
 
 def read_genomes(reader: Reader) -> None:
@@ -1637,6 +1694,27 @@ def runs_clause(reader: Reader) -> str:
     return f"{timed} for {and_list([tool['name'] for tool in tools])}, against {against}"
 
 
+def apart_sentences(reader: Reader, panels: list[dict]) -> str:
+    """The two sentences of the caption and of the alternative text on a reference whose wall time stands at
+    another version than its concordance: the version its wall times stand at, and the version against whose
+    output the F1 panels compare. Each version is kept among the values file's sources: the wall time's with
+    each timing record and key that states it, the concordance's with the release record's `perl_reference`
+    keys. Empty for any other reference, and where the wall-time panel holds no mark of the reference."""
+    reference, apart = reader.reference, reader.apart(reader.reference)
+    marks = [value["tool"] for panel in panels if PANEL_AXES[panel["id"]] == "seconds" for group in panel["groups"] for row in group["rows"]
+             for value in row["values"]]
+    if apart is None or reference["id"] not in marks:
+        return ""
+    release = reader.chosen["release"]
+    timed = f"{reference['name']} {apart[1]}"
+    for _, file, key in reader.timed[reference["id"]]:
+        reader.source(timed, {"file": file}, key)
+    families = block_of(release["data"], "perl_reference", release["file"])
+    scored = reader.source(f"{reference['name']} {apart[0]}", release, ", ".join(f"perl_reference.{family}.image" for family in families))
+    compared = SCORED_PANELS[sum(PANEL_AXES[panel["id"]] == "f1" for panel in panels) > 1]
+    return f"{TIMED_APART.format(reference=reference['name'], timed=timed)} {SCORED_APART.format(panels=compared, scored=scored)}"
+
+
 def methodology_clause(reader: Reader) -> str | None:
     """What a dataset's sum of cell medians is of, in the population record's own words: the first clause of
     its `methodology_note` that speaks of a sum of medians, kept with its key. Without such a clause the
@@ -1898,6 +1976,9 @@ def texts(reader: Reader, panels: list[dict]) -> tuple[str, str, list[str]]:
                 for file, read in keys.items():
                     reader.source(number, {"file": file}, "; ".join(read))
     caption.append(f"(b) Wall time per dataset and architecture{': ' if statistics else ''}{'; '.join(statistics)}.")
+    apart = apart_sentences(reader, panels)
+    if apart:
+        caption.append(apart)
     notes = []
     covered = None
     if "c" in by_id:
@@ -1993,7 +2074,10 @@ def texts(reader: Reader, panels: list[dict]) -> tuple[str, str, list[str]]:
     caption.append(RECORDS_SENTENCE)
 
     against = f"{and_list([reader.label(reader.released), *comparators])} against {reader.label(reader.reference)}"
-    sentences = " ".join(f"({panel['id']}) {alt_sentence(reader, panel)}" for panel in panels)
+    # The sentences on a reference whose wall time stands at another version follow the wall-time panel's part, as in the caption.
+    sentences = " ".join(
+        f"({panel['id']}) {alt_sentence(reader, panel)}{f' {apart}' if apart and PANEL_AXES[panel['id']] == 'seconds' else ''}" for panel in panels
+    )
     first = plugin_split(by_id)
     if "c" in by_id and 0 < first < len(by_id["c"]["groups"]):
         # Read without the image, the alternative text alone says that the plugin panel runs over both columns.
@@ -2030,6 +2114,14 @@ def build_values(tools: list[dict], chosen: dict, draft: bool) -> tuple[dict, li
         if tool["id"] in reader.drawn and tool["id"] not in reader.versions:
             fail(f"no record states a version of {tool['name']}; every mark names its tool's version")
     caption, alt, notes = texts(reader, panels)
+    entries = []
+    for tool in tools:
+        if tool["id"] not in reader.drawn:
+            continue
+        # A reference whose wall time stands at another version than its concordance states both, each under its own key.
+        apart = reader.apart(tool)
+        entry = {"id": tool["id"], "name": tool["name"], "version": apart[0] if apart else " and ".join(reader.versions[tool["id"]])}
+        entries.append(entry | ({"wall_time_version": apart[1]} if apart else {}) | {"colour": tool["fill"]})
     document = {
         "image": IMAGE,
         "canvas": {"width_px": CANVAS[0], "height_px": CANVAS[1]},
@@ -2037,11 +2129,7 @@ def build_values(tools: list[dict], chosen: dict, draft: bool) -> tuple[dict, li
         "caption": caption,
         "notes": notes,
         "sources": reader.sources,
-        "tools": [
-            {"id": tool["id"], "name": tool["name"], "version": " and ".join(reader.versions[tool["id"]]),
-             "colour": tool["fill"]}
-            for tool in tools if tool["id"] in reader.drawn
-        ],
+        "tools": entries,
         "records": [{"file": record["file"], "sha256": record["sha256"]} for record in chosen["read"]],
         "panels": panels,
     }
@@ -2053,7 +2141,10 @@ def values_bytes(document: dict) -> bytes:
 
 
 def tool_label(tool: dict) -> str:
-    return f"{tool['name']} {tool['version']}"
+    """A tool of the values file as the legend names it: its name and version and, where its wall time stands
+    at another version, that version beside them."""
+    label = f"{tool['name']} {tool['version']}"
+    return TIMED_LEGEND.format(label=label, version=tool["wall_time_version"]) if "wall_time_version" in tool else label
 
 
 def lane_tools(document: dict, panel: dict) -> list[str]:

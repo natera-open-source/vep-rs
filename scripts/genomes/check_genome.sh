@@ -794,13 +794,13 @@ REFERENCE_CACHE=()
 set -- --perl-dir "$ENSEMBL_OUT" --rust-dir "$VEP_RS_OUT" \
     --report-dir "$OUT/comparison" --input-vcf "$OUT/variants.vcf" \
     --no-canonical-contigs --assembly "$ASSEMBLY"
+# The comparator is given the converted cache on every cache: a class of a coding end takes
+# a pair only on the reading of its transcript's record there.
 # On a RefSeq and on a merged cache Ensembl VEP keeps one transcript a stable id among
 # those an input buffer loads, and on a merged cache, whose two transcript sets each number
 # their own transcripts, one a number before that. The comparator tells the rows of the
 # transcripts dropped so from the converted cache alone.
-case "$TRANSCRIPTS" in
-refseq | merged) set -- "$@" --json-cache "$JSON_CACHE" ;;
-esac
+set -- "$@" --json-cache "$JSON_CACHE"
 run_native compare "$COMPARATOR" "$@" ${REFERENCE_CACHE[@]+"${REFERENCE_CACHE[@]}"} ||
     step_failed "the comparison failed ($(tail -n 1 "$WORK/logs/compare.log"))"
 OPEN_ROWS_FILE="$OUT/comparison/discordant_open.tsv"

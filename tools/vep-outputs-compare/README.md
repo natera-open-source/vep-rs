@@ -306,11 +306,13 @@ What a comparison reads decides what it sets aside:
   an identifier carries no reference bases, and the four classes that read a sequence allele
   leave it a difference. The structural class reads no record.
 - Without `--reference-fasta FILE`, a deletion that begins in a stop codon polyadenylation
-  completes and runs past the transcript's last base is left a difference: whether the stop
-  codon is kept there is read from the bases after the transcript. The file is a FASTA read
+  completes and runs past the transcript's last base is read at the record's own place, as
+  vep-rs reads it in a run without a reference sequence. Beside the file, the bases after the
+  transcript tell where else the same deletion can be written, and whether the stop codon is
+  kept is read there. The file is a FASTA read
   through its `.fai` index where it has one and is not gzipped, and held whole otherwise.
   Beside a file that does not name the row's sequence no base is read, and such a deletion is
-  left a difference as it is without the file.
+  read as it is without the file.
 
 A `--json-cache` directory without a `transcripts/` directory ends the run with exit code 1 when
 a pair first asks for a record, and so does one with a JSON array or object under a shard's name
@@ -542,8 +544,8 @@ them, and a change of the contract changes them in the same commit.
 `scripts/concordance/run_clone_measurement.sh`, `scripts/concordance/run_concordance.sh` and
 `scripts/validation/compare_cache_outputs.sh` score tuples with this tree's build of the tool,
 and no environment variable selects another comparator. `scripts/genomes/check_genome.sh`
-compares a genome's two outputs with it as well, and names the converted cache for a genome
-checked on its RefSeq or its merged cache. `run_clone_measurement.sh` and
+compares a genome's two outputs with it as well, and names the converted cache for every
+genome. `run_clone_measurement.sh` and
 `compare_cache_outputs.sh` run the release build,
 `tools/vep-outputs-compare/target/release/vep-outputs-compare`, and build nothing;
 `run_concordance.sh` builds it through cargo, as it builds the engine it runs.

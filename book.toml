@@ -246,8 +246,9 @@ heading-split-level = 3
 "/cache-setup.html#the-1000-genomes-frequencies" = "cache-variation-data.html#the-1000-genomes-frequencies"
 
 # README sections shown on the Benchmarks, Getting started and Project pages.
-"/index.html#current-release-v040" = "benchmarks/current-release.html#current-release-v060"
-"/benchmarks/current-release.html#current-release-v050" = "current-release.html#current-release-v060"
+"/index.html#current-release-v040" = "benchmarks/current-release.html#current-release-v100"
+"/benchmarks/current-release.html#current-release-v050" = "current-release.html#current-release-v100"
+"/benchmarks/current-release.html#current-release-v060" = "current-release.html#current-release-v100"
 "/index.html#whole-genome-concordance" = "benchmarks/current-release.html#whole-genome-concordance"
 "/index.html#whole-genome-wall-time" = "benchmarks/current-release.html#whole-genome-wall-time"
 "/index.html#structural-variants" = "benchmarks/current-release.html#structural-variants"

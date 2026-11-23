@@ -360,8 +360,8 @@ jobs:
             "scripts/release/test_crate_publish_order.py 20"
             "scripts/parity/test_check_parity_matrix.py 184"
             "scripts/parity/test_plugin_gate_rows.py 42"
-            "scripts/docs/test_site_tools.py 225"
-            "scripts/docs/test_render_release_figure.py 215"
+            "scripts/docs/test_site_tools.py 227"
+            "scripts/docs/test_render_release_figure.py 222"
             "scripts/docs/test_render_plugin_wall_time.py 30"
             "scripts/docs/test_supported_genomes.py 52"
             "scripts/fixtures/test_maxentscan_fixture_matrices.py 27"
@@ -461,7 +461,7 @@ jobs:
             [ "$n" -ge "$2" ]
           }
           check scripts/concordance/test_run_clone_measurement.sh 308
-          check scripts/concordance/test_run_concordance.sh 25
+          check scripts/concordance/test_run_concordance.sh 32
           check scripts/concordance/test_tree_tuple_comparator.sh 50
           check scripts/concordance/test_plugin_comparator_switch.sh 15
           check scripts/concordance/test_generate_reference_output.sh 343

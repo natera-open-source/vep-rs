@@ -33,6 +33,9 @@ Places, each from one record:
   released tool and the comparators), `panel-count` and `panels` (the clause of each panel the file holds,
   in its order). The parts `one-comparator` and `several-comparators` hold by the number of comparators
   among the file's tools. The part `figure` holds when the tree has the pair.
+- `reference-timed`, inside the part `timed-apart`: the reference's name and the version its wall time
+  stands at, the `wall_time_version` of its entry among the file's tools. The part holds when the entry
+  states one: the figure script writes it where that version is another than the entry's `version`.
 
 Every count and every figure in seconds carries thousands separators.
 
@@ -326,6 +329,7 @@ def figure_places(
         fail(f"{VALUES} names the image {document['image']!r}; the page shows {IMAGE}")
     labels: dict[str, list[str]] = {role: [] for role in ROLES}
     released_version = None
+    timed = None
     entries = field(document, "tools", VALUES)
     for index, entry in enumerate(entries if isinstance(entries, list) else []):
         where = f"{VALUES} tools[{index}]"
@@ -336,6 +340,8 @@ def figure_places(
         labels[role].append(markdown_text(f"{name} {tool_version}"))
         if role == "released":
             released_version = tool_version
+        if role == "reference" and entry.get("wall_time_version") is not None:
+            timed = markdown_text(f"{name} {entry['wall_time_version']}")
     for role in ("released", "reference"):
         if len(labels[role]) != 1:
             fail(f"{VALUES} tools names {len(labels[role])} tools of the role {role}; the page names one")
@@ -373,6 +379,8 @@ def figure_places(
         "panel-count": (f"{word} panel{'' if len(ids) == 1 else 's'}", VALUES, "panels", "the count as a word"),
         "panels": (and_list([clauses[panel_id] for panel_id in ids]), VALUES, "panels[].id", f"the clause {TEMPLATE.name} gives each id"),
     }
+    if timed is not None:
+        places["reference-timed"] = (timed, VALUES, f"{by_role}: wall_time_version", "name and the version of its wall time")
     return places, len(labels["comparator"])
 
 
@@ -429,7 +437,7 @@ def build(repo: Path, template: str, registry: Path) -> tuple[str, dict[str, boo
     tools = read_registry(registry)
     records = release_records(repo, version)
     places: dict[str, tuple | None] = dict.fromkeys(
-        ("plugins-read", "figure-notes", "released", "reference", "comparators", "compared", "panel-count", "panels"),
+        ("plugins-read", "figure-notes", "released", "reference", "comparators", "compared", "panel-count", "panels", "reference-timed"),
     )
     population, datasets = population_places(*records["population"])
     places.update(population)
@@ -444,6 +452,7 @@ def build(repo: Path, template: str, registry: Path) -> tuple[str, dict[str, boo
     parts = {
         "plugins": records["plugins"] is not None, "figure": figure is not None,
         "one-comparator": comparators == 1, "several-comparators": comparators > 1,
+        "timed-apart": places["reference-timed"] is not None,
     }
     return fill(page, parts, places), parts, places, version
 

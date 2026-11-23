@@ -170,6 +170,24 @@ def record_set(**replaced) -> dict:
     return records
 
 
+# A made-up version the timing records name for the reference, another than the one its concordance records name,
+# and the two sentences both texts then carry after the wall-time panel's part.
+TIMED_VERSION = "999.8"
+TIMED_APART = f"Ensembl VEP's wall times are Ensembl VEP {TIMED_VERSION}'s figures, carried forward from the earlier reference generation."
+SCORED_APART = f"The concordance panels compare against Ensembl VEP {REFERENCE_VERSION}'s output."
+
+
+def timed_at(population: str | None = TIMED_VERSION, walltime: str | None = TIMED_VERSION) -> dict:
+    """The population record and the comparators' wall-time record, each naming the reference's wall time at
+    the version given, or at the version its concordance records name where None is given."""
+    records = {"population": population_record(), "walltime": walltime_record()}
+    if population is not None:
+        records["population"]["wall_time"]["ensembl_vep"]["engine_version"] = f"release_{population}"
+    if walltime is not None:
+        records["walltime"]["engines"]["perl"]["version"] = f"release_{walltime}"
+    return records
+
+
 GENOME_REASON = "reads no made-up transcript cache"
 GENOME_SENTENCE = (
     f"fastVEP {COMPARATOR_VERSION}'s documentation says that its gene models come from a made-up file and that it reads no made-up transcript "
@@ -2579,9 +2597,112 @@ def test_a_comparator_run_with_other_extra_arguments_is_refused(tmp_path):
     assert f"2001-01-01-comparator-fastvep-{COMPARATOR_VERSION}.json: none" in message
 
 
-def test_one_tool_at_two_versions_is_refused(tmp_path):
-    message = refusal(tmp_path, record_set(population=population_record(comparator="v0.0.9")))
-    assert message == f"the records name fastVEP at {COMPARATOR_VERSION} and v0.0.9; a tool is drawn at one version, and --draft draws a marked draft"
+def released_timed_at_another_version() -> dict:
+    population = population_record()
+    population["wall_time"]["vep_rs"]["engine_version"] = "v0.0.9"
+    return record_set(population=population)
+
+
+def concordance_families_at_two_versions() -> dict:
+    release = release_record()
+    release["perl_reference"]["sv"]["image"] = "ensemblorg/ensembl-vep:release_999.9"
+    return record_set(release=release)
+
+
+def plugin_reference_at_the_version_of_the_wall_time() -> dict:
+    plugins = copy.deepcopy(PLUGINS)
+    plugins["perl_reference"][0]["ensembl_vep"] = TIMED_VERSION
+    return record_set(plugins=plugins, **timed_at())
+
+
+@pytest.mark.parametrize(
+    ("records", "message"),
+    [
+        (released_timed_at_another_version, f"the records name vep-rs at {RELEASE} and v0.0.9; a tool is drawn at one version"),
+        (lambda: record_set(population=population_record(comparator="v0.0.9")),
+         f"the records name fastVEP at {COMPARATOR_VERSION} and v0.0.9; a tool is drawn at one version"),
+        (lambda: record_set(**timed_at(walltime="999.7")),
+         f"the records time Ensembl VEP at {TIMED_VERSION} and 999.7; its wall time is drawn at one version"),
+        (lambda: record_set(**timed_at(population=None)),
+         f"the records time Ensembl VEP at {REFERENCE_VERSION} and {TIMED_VERSION}; its wall time is drawn at one version"),
+        (concordance_families_at_two_versions,
+         f"the records name Ensembl VEP's output at {REFERENCE_VERSION} and 999.9; its concordance is drawn at one version"),
+        (plugin_reference_at_the_version_of_the_wall_time,
+         f"the records name Ensembl VEP's output at {REFERENCE_VERSION} and {TIMED_VERSION}; its concordance is drawn at one version"),
+    ],
+    ids=[
+        "the-released-tool", "a-comparator", "the-references-wall-time-across-the-timing-records",
+        "the-references-wall-time-in-one-timing-record-alone", "the-references-concordance-across-the-release-records-families",
+        "the-references-concordance-in-the-plugin-record-at-the-version-of-its-wall-time",
+    ],
+)
+def test_one_tool_at_two_versions_is_refused(tmp_path, records, message):
+    # A tool is drawn at one version. The reference alone may stand at two, one for its concordance and one for its
+    # wall time: two versions of either are refused as such, and no other tool's wall time may stand apart.
+    assert refusal(tmp_path, records()) == f"{message}, and --draft draws a marked draft"
+    # A draft draws each set, and names every version the records state for the tool under its one `version`.
+    document = values_of(tmp_path / "draft", records(), "--draft")
+    named = set(re.findall(r" at (.+);", message)[0].split(" and "))
+    assert any(named <= set(tool["version"].split(" and ")) and "wall_time_version" not in tool for tool in document["tools"])
+
+
+def test_the_reference_is_drawn_at_the_version_of_its_concordance_and_its_wall_time_at_the_version_the_timing_records_name(tmp_path):
+    names = {kind: next(name for name in record_set() if f"-{kind}-" in name) for kind in ("release", "population", "walltime")}
+    same = values_of(tmp_path / "same")
+    document = values_of(tmp_path, record_set(**timed_at()))
+    assert "Draft" not in json.dumps(document)
+    # The reference's entry states both versions, each under its own key, and no other tool's entry differs.
+    assert document["tools"] == same["tools"][:2] + [
+        {"id": "ensembl-vep", "name": "Ensembl VEP", "version": REFERENCE_VERSION, "wall_time_version": TIMED_VERSION, "colour": "#009E73"}]
+    assert not any("wall_time_version" in tool for tool in same["tools"])
+    # The legend alone draws the version of the wall time, beside the reference's own; an F1 axis names no version.
+    registry = figure.read_registry(REGISTRY)
+    legend = [entry["label"] for entry in figure.legend_entries(document) if entry["mark"] in figure.LEGEND_KINDS[0]]
+    assert legend == [f"vep-rs {RELEASE}", f"fastVEP {COMPARATOR_VERSION}", f"Ensembl VEP {REFERENCE_VERSION} (wall time: {TIMED_VERSION})"]
+    assert [text for text in figure.drawn_texts(document, registry) if TIMED_VERSION in text] == [legend[2]]
+    for panel_id in ("a", "c"):
+        assert figure.axis_lines(document, registry, panel(document, panel_id))[0] == "F1 against Ensembl VEP"
+    # Both texts open against the version of the concordance and carry the two sentences after the wall-time
+    # panel's part; without them each is the text the same records give at one version, as every panel is.
+    lead = f"vep-rs {RELEASE} against Ensembl VEP {REFERENCE_VERSION}, with fastVEP {COMPARATOR_VERSION} as comparator."
+    assert document["caption"].startswith(f"**{lead}** (a) ")
+    assert document["alt_text"].startswith(f"Four panels comparing vep-rs {RELEASE} and fastVEP {COMPARATOR_VERSION} against Ensembl VEP {REFERENCE_VERSION}. ")
+    sentences = f" {TIMED_APART} {SCORED_APART}"
+    for text in ("caption", "alt_text"):
+        assert document[text].count(f"{RUNS_CLAUSE}.{sentences} (c) ") == 1
+        assert document[text].replace(sentences, "") == same[text]
+    assert document["panels"] == same["panels"] and document["notes"] == same["notes"] == []
+    # Each version the sentences name is kept with the records and keys that state it, and no other source differs.
+    added = [
+        {"text": f"Ensembl VEP {TIMED_VERSION}", "record": names["population"], "key": "wall_time.ensembl_vep.engine_version"},
+        {"text": f"Ensembl VEP {TIMED_VERSION}", "record": names["walltime"], "key": "engines.perl.version"},
+        {"text": f"Ensembl VEP {REFERENCE_VERSION}", "record": names["release"], "key": "perl_reference.snv_indel.image, perl_reference.sv.image"},
+    ]
+    assert [source for source in document["sources"] if source not in same["sources"]] == added
+    assert [source for source in document["sources"] if source not in added] == same["sources"]
+    # One F1 panel is named as one.
+    alone = values_of(tmp_path / "alone", record_set(plugins=None, **timed_at()))
+    for text in ("caption", "alt_text"):
+        assert f"{RUNS_CLAUSE}. {TIMED_APART} The concordance panel compares against Ensembl VEP {REFERENCE_VERSION}'s output. " in alone[text]
+    # A draft states the two versions the same way.
+    draft = values_of(tmp_path / "draft", record_set(**timed_at()), "--draft")
+    assert draft["tools"] == document["tools"] and draft["caption"] == f"{figure.DRAFT_LINE} {document['caption']}"
+    # A registry that keeps the reference out of the wall-time panel draws no mark of it: the texts open against
+    # the version of its concordance and say nothing of its wall time.
+    unmarked = values_of(tmp_path / "unmarked", record_set(**timed_at()), registry=registry_with(tmp_path, lambda rows: rows["ensembl-vep"].update(speed_panel="no")))
+    assert [tool["id"] for tool in unmarked["tools"]] == ["vep-rs", "fastvep"]
+    assert unmarked["caption"].startswith(f"**{lead}** (a) ")
+    assert not any(TIMED_VERSION in unmarked[text] or "wall times are" in unmarked[text] for text in ("caption", "alt_text"))
+    # The texts keep the concordance's version with the keys of the release record's `perl_reference`. Where that
+    # block names no version and the plugin record alone names one, beside another that the timing records name,
+    # the records are refused by name, and a draft names both under the one `version`.
+    unnamed = release_record()
+    unnamed["perl_reference"] = {}
+    assert refusal(tmp_path / "unnamed", record_set(release=unnamed, **timed_at())) == (
+        f"the records name Ensembl VEP's output at {REFERENCE_VERSION} and time it at {TIMED_VERSION}, and {names['release']} perl_reference names no "
+        "version; its concordance is drawn at the version perl_reference names, and --draft draws a marked draft")
+    drawn = values_of(tmp_path / "unnamed-draft", record_set(release=unnamed, **timed_at()), "--draft")["tools"][2]
+    assert set(drawn["version"].split(" and ")) == {REFERENCE_VERSION, TIMED_VERSION} and "wall_time_version" not in drawn
 
 
 def ungated(engine="vep-rs", passed=False) -> dict:
@@ -4291,9 +4412,16 @@ def test_a_block_whose_reference_is_another_release_than_the_records_is_refused_
     block = genome_block()
     block["reference"]["image"] = "ensemblorg/ensembl-vep:release_999.9"
     assert refusal(tmp_path, with_genomes(block)) == (
-        f"the records name Ensembl VEP at {REFERENCE_VERSION} and 999.9; a tool is drawn at one version, and --draft draws a marked draft")
+        f"the records name Ensembl VEP's output at {REFERENCE_VERSION} and 999.9; its concordance is drawn at one version, and --draft draws a "
+        "marked draft")
     document = values_of(tmp_path / "draft", with_genomes(block), "--draft")
     assert "against the stored output of Ensembl VEP 999.9." in document["caption"]
+    # The block's reference is a version of the reference's concordance: one that is the version of its wall time
+    # and another than the release record's is refused the same way.
+    block["reference"]["image"] = f"ensemblorg/ensembl-vep:release_{TIMED_VERSION}"
+    assert refusal(tmp_path / "timed", record_set(release=release_with_genomes(block), **timed_at())) == (
+        f"the records name Ensembl VEP's output at {REFERENCE_VERSION} and {TIMED_VERSION}; its concordance is drawn at one version, and --draft "
+        "draws a marked draft")
 
 
 def test_the_cross_of_panel_e_is_the_plugin_panels_cross_at_the_left_of_the_plot_with_its_reason_beside_it():
@@ -4485,9 +4613,11 @@ def readme_mismatches(readme: str, document: dict) -> list[str]:
     of panel (a) is the README's row of the same name, which states both assemblies. The README has no table
     for panel (e): each value of that panel is held to the words of the current-release section, which carries
     the figure's caption and, in its image line, the alternative text. A text stands there word for word, and a
-    bar's count with its thousands separators."""
+    bar's count with its thousands separators. A wall-time column is named for its tool at the version of the
+    tool's wall time, which the values file states apart where it is another than the tool's own."""
     found = tables(readme)
     labels = {tool["id"]: f"{tool['name']} {tool['version']}" for tool in document["tools"]}
+    timed = {tool["id"]: f"{tool['name']} {tool.get('wall_time_version', tool['version'])}" for tool in document["tools"]}
     comparators = {tool["id"] for tool in figure.read_registry(REGISTRY) if tool["role"] == "comparator"}
     out = []
 
@@ -4512,7 +4642,10 @@ def readme_mismatches(readme: str, document: dict) -> list[str]:
         for row in group["rows"]:
             shown = one(found["Whole-genome wall time"], Dataset=name, Assembly=assembly, Arch=row["label"])
             for value in row["values"]:
-                column = next(c for c in shown if c.startswith(f"{labels[value['tool']]} (s)"))
+                column = next((c for c in shown if c.startswith(f"{timed[value['tool']]} (s)")), None)
+                if column is None:
+                    out.append(f"(b) {group['label']} {row['label']} {value['tool']}: the README's table has no column of {timed[value['tool']]}")
+                    continue
                 compare(f"(b) {group['label']} {row['label']} {value['tool']}", value["value"], shown[column].split(" ")[0])
     if any(p["id"] == "c" for p in document["panels"]):
         data = {"Committed table": "committed table",
@@ -4841,3 +4974,22 @@ def test_a_readme_row_that_states_the_population_sum_is_held_to_the_figures_sum(
     for wrong, kind, value in ((stated(off(raw), adjusted), "bar", raw), (stated(raw, off(adjusted)), "marker", adjusted)):
         readme.write_text(text.replace(stated(raw, adjusted), wrong), encoding="utf-8")
         assert pair_problems(repo) == [f"(c) {plugin} {assembly} vep-rs {kind}: the figure states {value}, the README {off(value)}"]
+
+
+def test_a_wall_time_column_of_the_readme_is_held_to_the_version_the_references_wall_time_stands_at(tmp_path):
+    repo = synthetic_tree(tmp_path, record_set(**timed_at()))
+    readme = repo / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    header = f"| Ensembl VEP {REFERENCE_VERSION} (s) |"
+    assert text.count(header) == 1
+    # The made-up README names the reference's column at the version of its concordance: the figure's eight wall
+    # times of the reference, stated at the version the timing records name, find no column.
+    lacking = f"ensembl-vep: the README's table has no column of Ensembl VEP {TIMED_VERSION}"
+    assert pair_problems(repo) == [f"(b) {group} {arch} {lacking}" for group in ("ClinVar GRCh37", "ClinVar GRCh38", "Population A GRCh38", "Population B GRCh37")
+                                   for arch in ("ARM", "x86")]
+    # Named at that version, the column holds each of them, and a value off its cell is named as any other.
+    shown = text.replace(header, f"| Ensembl VEP {TIMED_VERSION} (s) |")
+    readme.write_text(shown, encoding="utf-8")
+    assert pair_problems(repo) == []
+    readme.write_text(shown.replace("| 700.00 (467x) |", "| 700.01 (467x) |"), encoding="utf-8")
+    assert pair_problems(repo) == ["(b) ClinVar GRCh37 ARM ensembl-vep: the figure states 700.00, the README 700.01"]

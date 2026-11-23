@@ -1777,6 +1777,14 @@ print(f"wrote provenance: {out}")
 PY
 
 echo "comparing outputs"
+# Under an assembly that is not a human one the comparator reads a cache's sequence names from
+# the contig_order of its info.json and ends the run where that lists none. With the contig
+# filter on such a cache is refused above; with it off the comparison runs without the cache.
+COMPARE_CACHE_ARGS=(--json-cache "${JSON_CACHE_DIR}")
+if [[ "${CANONICAL_CONTIGS}" -ne 1 && "${ASSEMBLY}" != "GRCh37" && "${ASSEMBLY}" != "GRCh38" ]] &&
+    [[ -z "$(python3 -c 'import json, sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8")).get("contig_order") or []))' "${JSON_CACHE_DIR}/info.json")" ]]; then
+    COMPARE_CACHE_ARGS=()
+fi
 COMPARE_ARGS=(
     --perl-dir "${WORK_DIR}/perl"
     --rust-dir "${WORK_DIR}/rust"
@@ -1785,6 +1793,7 @@ COMPARE_ARGS=(
     --assembly "${ASSEMBLY}"
     --reference-release "${REFERENCE_RELEASE}"
     "${CANONICAL_CONTIGS_FLAG[@]}"
+    "${COMPARE_CACHE_ARGS[@]+"${COMPARE_CACHE_ARGS[@]}"}"
 )
 run_timed "compare_outputs" "${OUTPUTS_COMPARE[@]}" "${COMPARE_ARGS[@]}"
 

@@ -183,7 +183,7 @@ The class sets both fields aside under a second rule, counted once per row, wher
 | The rule reads | and finds |
 | --- | --- |
 | vep-rs's term | the lost stop, beside an annotation whose every group carries a `KozakContext` and a `KozakStrength` |
-| Ensembl VEP's two fields | both empty, or the lost start, the gained start or the frameshift; a frameshift's list holds no group with the `KozakContext` and `KozakStrength` of a group of vep-rs's |
+| Ensembl VEP's two fields | both empty, or the lost start, the gained start or the frameshift; a frameshift's list holds no group with the `KozakContext` and `KozakStrength` of a group of vep-rs's, unless vep-rs's stop codon lies outside that listed ORF's frame, whole codons past a stop codon the insertion can be written directly before and inside |
 | the allele's length | no multiple of three |
 | `HGVS_OFFSET` | a whole number other than zero: the insertion can be written further on, inside the stop codon |
 | Ensembl VEP's outputs under other hash seeds, where the comparison is given them | none writes the lost stop on the row |

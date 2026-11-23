@@ -15,7 +15,7 @@ This entry holds the coding ends where none stands:
 3. A coding sequence that ends one or two bases into a codon on the transcript's last base, where the record shows no such model.
 4. Any coding end of a transcript that carries `cds_end_NF`.
 
-Bases that the record gives as 3' UTR are not read as the stop codon, even where they are the stop codon of the coding sequence's own frame. Such a transcript is of the first or second kind, and its row is the one this page derives. vep-rs's maintainers decided that reading.
+Bases that the record gives as 3' UTR are not read as the stop codon, even where they are the stop codon of the coding sequence's own frame. Such a transcript is of the first or second kind, and its row is the one this page derives.
 
 There vep-rs does not read a stop behind an unchanged protein as a stop codon kept. `stop_retained_variant` is not written, nothing withholds `stop_gained`, and the row carries it beside the in-frame term.
 

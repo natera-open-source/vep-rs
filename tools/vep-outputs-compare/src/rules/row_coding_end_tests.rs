@@ -803,8 +803,10 @@ fn a_rule_reads_the_reference_bases_of_a_file_that_names_the_pairs_sequence_alon
     // Written with its end inside the transcript as well, the deletion is not derived.
     let (_further_back, named) = reference_of("7", false);
     assert_eq!(asked(Some(&named)), (Some(Some(b'A')), None));
-    // A file that names another sequence holds no base of the pair's.
+    // A file that names another sequence holds no base of the pair's: as without a file,
+    // the deletion is read at the record's own place, where vep-rs's row holds the term
+    // derived.
     let (_other, other) = reference_of("8", true);
-    assert_eq!(asked(Some(&other)), (None, None));
-    assert_eq!(asked(None), (None, None));
+    assert_eq!(asked(Some(&other)), (None, Some(COMPLETED)));
+    assert_eq!(asked(None), (None, Some(COMPLETED)));
 }

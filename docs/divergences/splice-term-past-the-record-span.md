@@ -216,7 +216,7 @@ The third is a record whose two alleles have the same length. No index of it lie
 
 | vep-rs's row beside Ensembl VEP's | Terms |
 | --- | --- |
-| Can hold, from the two bases beside the insertion | `splice_region_variant`, `splice_donor_region_variant`, `splice_polypyrimidine_tract_variant`, `intron_variant` |
+| Can hold, from the two bases beside the insertion | `splice_region_variant`, `splice_donor_region_variant`, `splice_polypyrimidine_tract_variant`, `intron_variant`; where the kept base is an intron of one base, `splice_donor_variant` or `splice_acceptor_variant`, the term both engines write for the same insertion as a record of one alternate allele |
 | Can lack, where only the bases after the span give it | each of the six terms |
 | Can lack, where only a one-base span that the allele keeps gives it | each of the six terms and `splice_region_variant` |
 
@@ -255,7 +255,7 @@ With the alleles, the predicate takes a `Transcript` row of a record that is no 
 | On a row of an insertion written after the span | The predicate reads |
 | --- | --- |
 | The record | an allele that opens with its whole reference allele, of one base or more, which the record's alleles alone show: without them no row is read this way |
-| vep-rs's `Consequence` | the terms of the insertion between the span's last base and the base after it: it may also hold `splice_polypyrimidine_tract_variant` and `intron_variant` where Ensembl VEP's does not |
+| vep-rs's `Consequence` | the terms of the insertion between the span's last base and the base after it: it may also hold `splice_polypyrimidine_tract_variant` and `intron_variant` where Ensembl VEP's does not, and after a reference allele of one base `splice_donor_variant` or `splice_acceptor_variant`, where Ensembl VEP's holds none of the six and no `splice_region_variant` |
 | Ensembl VEP's `Consequence` | may hold any of the six terms where vep-rs's does not, and need hold none: with the record's alleles, a pair that an earlier rule only counts is put to this predicate too |
 | Ensembl VEP's `Consequence` after a reference allele of one base | may also hold `splice_region_variant` where vep-rs's does not: Ensembl VEP reads that base as changed |
 | Either `Consequence` printed under `--terms display` | the three names the seven terms print there, `ESSENTIAL_SPLICE_SITE`, `SPLICE_SITE` and `INTRONIC`, read with the record's alleles alone; where no corpus manifest documents the row, the `IMPACT` beside it stays a difference |

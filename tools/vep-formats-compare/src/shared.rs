@@ -1479,8 +1479,8 @@ fn displayed_span_placement(
 /// The class on two entries printed under `--terms display`, or `None` where neither holds
 /// a display name of the seven (`DISPLAY_ROW_TERMS`). The entries' other terms are equal and
 /// their names of the seven differ; the candidate's entry alone does not hold the name of the
-/// donor and the acceptor term, as it alone holds neither term under the Sequence Ontology
-/// names; the record's alleles show a longer alternate allele that is no pure insertion, as
+/// donor and the acceptor term, so its site term at an intron of one base stays a difference
+/// here; the record's alleles show a longer alternate allele that is no pure insertion, as
 /// under those names, and a place of one intron gives both entries' names
 /// (`displayed_span_placement`). Where the allele is not written after its span, the
 /// reference's entry holds a name the candidate's lacks, as it holds a term of the six alone
@@ -1556,7 +1556,10 @@ fn display_vocabulary_pair(
 /// either. The reference does not compare the two alleles (:418) and reads the one base as
 /// changed (:452-454), so its terms are those of that base, and the candidate's those of the
 /// insertion after it (`insertion_after_one_base`): on its row the reference alone may hold
-/// `splice_region_variant` as well.
+/// `splice_region_variant` as well. Where the reference's row holds none of the seven and is
+/// no row beside the transcript, the candidate's may alone hold the donor or the acceptor
+/// term: the base is an intron of one base, and both engines write that term for the same
+/// insertion written as a record of one alternate allele.
 ///
 /// With the record's alleles the two rows are those of a longer alternate allele that is no
 /// pure insertion at a place of the intron the cDNA positions allow
@@ -1667,7 +1670,21 @@ pub fn splice_term_past_the_record_span_pair_beside(
     let may_go = |term: &&str| {
         PAST_THE_SPAN_TERMS.contains(term) || (after_one_base && *term == SPLICE_REGION_TERM)
     };
-    if !differ || !gone.iter().all(may_go) || !come.iter().all(|term| may_come.contains(term)) {
+    // An intron of one base that is the kept base: the window of its first two bases holds it
+    // and the exon base after it, so the insertion draws a site term
+    // (BaseTranscriptVariationAllele.pm:176-178) where the base, read as changed inside a
+    // frameshift intron, draws none of the seven (:171-174). No other place gives such rows.
+    let beside_the_transcript = ["upstream_gene_variant", "downstream_gene_variant"];
+    let site = after_one_base
+        && !expected_terms.iter().any(read)
+        && !expected_others
+            .iter()
+            .any(|term| beside_the_transcript.contains(term));
+    let may_come = |term: &&str| {
+        may_come.contains(term)
+            || (site && ["splice_donor_variant", "splice_acceptor_variant"].contains(term))
+    };
+    if !differ || !gone.iter().all(may_go) || !come.iter().all(may_come) {
         return Ok(false);
     }
     let Some(reference) = reference else {

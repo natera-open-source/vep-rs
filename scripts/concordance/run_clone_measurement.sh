@@ -1133,13 +1133,15 @@ measure_p1() {
 		if [[ "$WALLTIME_ONLY" != "true" ]] && ground_truth_ready "$dataset_id" "$dataset_name" "$assembly" "$gt_dir"; then
 			mkdir -p "$dataset_dir/perl"
 			ln -sf "$gt_dir/output.txt" "$dataset_dir/perl/output.txt"
+			# The comparator sets a pair aside under a class that reads a coding end of the
+			# pair's transcript only beside the cache the cell annotated with.
 			"${OUTPUTS_COMPARE[@]}" \
 				--perl-dir "$dataset_dir/perl" \
 				--rust-dir "$dataset_dir/rust" \
 				--report-dir "$dataset_dir/report" \
 				--reference-release "$reference_release" \
 				--input-vcf "$vcf" \
-				--assembly "$assembly" || {
+				--assembly "$assembly" --json-cache "$cache" || {
 				echo "ERROR: [run_clone_measurement] $dataset_id SNP/indel compare failed; the cell has no F1 and this run is incomplete" >&2
 				csv_row "$dataset_id" "$dataset_name" "$assembly" "compare_failed" "" "1"
 				return 1

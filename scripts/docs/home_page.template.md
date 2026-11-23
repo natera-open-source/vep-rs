@@ -14,12 +14,12 @@ It does the work of Ensembl VEP, the Variant Effect Predictor: for each variant 
 <figure class="home-figure">
 <a href="assets/comparison.png">
 
-![<<figure-notes>><<panel-count>> comparing <<compared>> against <<reference>>: <<panels>>.](assets/comparison.png)
+![<<figure-notes>><<panel-count>> comparing <<compared>> against <<reference>>: <<panels>>.<<if timed-apart>> Ensembl VEP's wall times are <<reference-timed>>'s figures, carried forward from the earlier reference generation.<<end timed-apart>>](assets/comparison.png)
 
 </a>
 <figcaption>
 
-<<figure-notes>><<released>> against <<reference>><<if one-comparator>>, with <<comparators>> as comparator<<end one-comparator>><<if several-comparators>>, with <<comparators>> as comparators<<end several-comparators>>.
+<<figure-notes>><<released>> against <<reference>><<if one-comparator>>, with <<comparators>> as comparator<<end one-comparator>><<if several-comparators>>, with <<comparators>> as comparators<<end several-comparators>>.<<if timed-apart>> Ensembl VEP's wall times are <<reference-timed>>'s figures, carried forward from the earlier reference generation.<<end timed-apart>>
 
 </figcaption>
 </figure>

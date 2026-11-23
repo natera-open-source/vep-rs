@@ -222,7 +222,10 @@ options:
                         that uORF's alt_type_length ends it; or the candidate
                         writes a lost stop beside a reference that writes no
                         term, the lost start, the gained start or a frameshift
-                        that lists no ORF of the candidate's Kozak pairs,
+                        that lists no ORF of the candidate's Kozak pairs or
+                        lists one whose frame the candidate's stop codon lies
+                        outside, whole codons past a stop codon the insertion
+                        can be written directly before and inside,
                         where the Allele's length is no multiple of three, the
                         row's HGVS_OFFSET is not zero and no run of
                         --utrannotator-sweep writes the lost stop on the row:
@@ -1054,7 +1057,10 @@ options:
                         reference need hold no term alone. After one
                         reference base Ensembl VEP reads that base as changed,
                         and the reference alone may hold splice_region_variant
-                        as well. Without them the
+                        as well. Where its row then holds none of the six and
+                        no splice_region_variant, the candidate alone may hold
+                        splice_donor_variant or splice_acceptor_variant: the
+                        base is an intron of one base. Without them the
                         Location holds three or more positions, the allele
                         more nucleotide letters than the span has bases and
                         the two cDNA positions are numbers as far apart as the

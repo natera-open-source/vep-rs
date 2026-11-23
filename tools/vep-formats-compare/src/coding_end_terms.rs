@@ -216,17 +216,14 @@ pub enum NotDerived {
     InsertionOnAnEditedModel,
     /// The record's sequence is not kept for the transcript, and the row needs it.
     SequenceNotKept,
-    /// The codons the allele spans hold protein position 1 or a residue an edit of the
-    /// sequence writes.
+    /// The codons the allele spans hold a residue an edit of the sequence writes, or
+    /// protein position 1 where the first codon is not read as any other.
     SequenceEdit,
     /// A shape of allele on a completed stop codon that the derivation does not cover.
     ShapeNotCovered,
     /// A span that lacks a cDNA or CDS coordinate on a completed stop codon, other than a
     /// deletion that runs past the transcript's last base.
     SpanLacksACoordinate,
-    /// The deletion past the transcript's last base needs reference bases, and the
-    /// comparison has no reference sequence.
-    NoReferenceBases,
     /// The deletion past the transcript's last base can be written with its end inside
     /// the transcript, where the bases after it are read.
     PlacementInsideTheTranscript,
@@ -269,9 +266,6 @@ impl fmt::Display for NotDerived {
             NotDerived::SequenceEdit => text.write_str("the codons hold an edited residue"),
             NotDerived::ShapeNotCovered => text.write_str("a shape that is not covered"),
             NotDerived::SpanLacksACoordinate => text.write_str("the span lacks a coordinate"),
-            NotDerived::NoReferenceBases => {
-                text.write_str("no reference bases past the transcript's end")
-            }
             NotDerived::PlacementInsideTheTranscript => {
                 text.write_str("the deletion can be written with its end inside the transcript")
             }
@@ -2499,14 +2493,12 @@ fn on_the_completed_sequence(
     let protein = positions(theirs.protein_position, "Protein_position", neighbours)?;
     let (lowest, highest) = row.location;
 
-    // Two shapes are left out: a deletion that begins at the second of two tail bases
-    // and runs past the transcript's last base, and an insertion of a multiple of
-    // three bases between the two tail bases.
+    // One shape is left out: an insertion of a multiple of three bases between the two
+    // tail bases. A deletion that begins at the second of two tail bases and runs past
+    // the transcript's last base is read as the sequence given (`given`): it leaves the
+    // first tail base before the adenines.
     let at_the_second_tail_base = tail == 2 && cds.0 == Some(cached_length as i64);
-    if at_the_second_tail_base
-        && ((lengths.deletion() && cdna.1.is_none())
-            || (lengths.between_two_bases() && lengths.allele % 3 == 0))
-    {
+    if at_the_second_tail_base && lengths.between_two_bases() && lengths.allele % 3 == 0 {
         return Err(NotDerived::ShapeNotCovered);
     }
 
@@ -2559,9 +2551,10 @@ fn on_the_completed_sequence(
     // `TranscriptVariationAllele::peptide`: the whole codons translated, the unknown
     // residue for a partial last codon unless the peptide is the lone stop, and `-` for
     // nothing translated. The reference peptide takes the residues an edit of the
-    // sequence writes, which are read from the cached peptide: a window that holds
-    // protein position 1, or a residue the cached peptide states otherwise than its
-    // codon, is not derived.
+    // sequence writes, which are read from the cached peptide: a window that holds a
+    // residue the cached peptide states otherwise than its codon is not derived, nor
+    // one that holds protein position 1, unless the first codon is whole, shows no
+    // start codon and carries no `cds_start_NF`: vep-rs reads that codon as any other.
     let translate = |codon: &[u8]| -> Vec<u8> {
         if codon == b"-" {
             return b"-".to_vec();
@@ -2584,7 +2577,11 @@ fn on_the_completed_sequence(
     if let (Some(codon), (Some(first), Some(last))) = (reference_codon.as_deref(), protein) {
         if codon != b"-" {
             let (first, last) = (first.min(last), first.max(last));
-            if first <= 1 {
+            let as_any_other = StartEnd::NotShown {
+                flagged: false,
+                padded: false,
+            };
+            if first < 1 || (first == 1 && ends.start != as_any_other) {
                 return Err(NotDerived::SequenceEdit);
             }
             for position in first..=last.min(whole_codons as i64) {
@@ -2879,7 +2876,11 @@ struct DeletionPastTheEnd<'a> {
 /// (`PerlCodingEval::given_stop_codon`), for the one shape derived: a deletion that
 /// begins in the coding sequence and runs past the transcript's last base. The
 /// reference bases tell how many places the same deletion can be written further along
-/// the transcript and how many back. Written where it takes no coding base, it keeps
+/// the transcript and how many back; a comparison without a reference sequence reads
+/// the deletion at the record's own place, as vep-rs does when it is run without one.
+/// A class takes a pair only where vep-rs's row holds the terms derived
+/// (`CodingEndClass::takes`), so a row on which vep-rs reads other terms at another
+/// place is not set aside. Written where it takes no coding base, it keeps
 /// the stop codon. Written with its end inside the transcript, the bases after it are
 /// read, which is not derived. Otherwise the transcript's sequence ends where the
 /// deletion begins at its furthest place, and the adenines of the poly(A) tail follow:
@@ -2921,7 +2922,8 @@ fn deletion_past_the_transcript_end(
         }
         (next_cdna, before) = (wide(from_end) + 1, Some(last));
     }
-    let base = reference_bases.ok_or(NotDerived::NoReferenceBases)?;
+    let no_base = |_: i64| None;
+    let base = reference_bases.unwrap_or(&no_base);
     let (start, end) = match asked.reverse {
         false => (wide(lowest), wide(highest)),
         true => (-wide(highest), -wide(lowest)),

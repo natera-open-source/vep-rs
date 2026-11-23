@@ -2484,6 +2484,45 @@ fn lost_stop_of_a_record_written_at_or_before_the_stop_codon_is_set_aside() {
         asked(BEFORE_STOP, &empty, &elsewhere).fields(),
         [true, true]
     );
+    // The reference lists two shifted ORFs that share a stop codon 40 bases before the
+    // coding start, the further one with the Kozak pair of the engine's group, and the
+    // engine reports the lost stop of a third ORF, whose stop codon begins 54 bases before
+    // the coding start. The engine's stop codon lies outside the listed ORF's frame, three
+    // codons past that stop codon, which the record is written directly before or, under
+    // an offset of two, one base before; the two shifted ORFs end on it.
+    let pair = |orf: &str| orf.trim_end_matches(ENDS).to_string();
+    let shifted = |pair: String, start: u32, length: u32, changed: u32| {
+        format!("{pair}alt_type=uORF:alt_type_length={changed}:ref_StartDistanceToCDS={start}:ref_type=uORF:ref_type_length={length}")
+    };
+    let listed = format!(
+        "{},{}",
+        shifted(pair(&other_orf), 88, 51, 39),
+        shifted(pair(&same_orf), 97, 60, 48)
+    );
+    let one_base_before = coding_notation("-54_-53insAC;HGVS_OFFSET=2");
+    for written in [&further, &one_base_before] {
+        let third_orf = inserted("AC", (FRAMESHIFT, &listed), written);
+        assert_eq!(
+            asked(BEFORE_STOP, &third_orf, &engine).fields(),
+            [true, true],
+            "{written}"
+        );
+    }
+    // Three stop codons stay differences: one in the frame of the listed ORF of the
+    // engine's Kozak pair, which ends on the stop codon the record is written before; and,
+    // beside the two shifted ORFs, one no whole number of codons past the insertion and one
+    // at the bases read in place of the lost stop codon.
+    for (list, stop) in [(&same_orf, 44), (&listed, 46), (&listed, 56)] {
+        let reference = inserted("AC", (FRAMESHIFT, list), &further);
+        let distance = format!("AltStopDistanceToCDS={stop}");
+        let group = LOST_GROUP.replace("AltStopDistanceToCDS=47", &distance);
+        let engine = inserted("AC", (STOP_LOSS, &group), "");
+        assert_eq!(
+            asked(BEFORE_STOP, &reference, &engine).fields(),
+            [false; 2],
+            "{stop}"
+        );
+    }
     // An allele whose length is a multiple of three, a row without an offset or with one
     // of zero, a reference that reports the gained stop or its own lost stop or fills the
     // annotation alone, and an engine's entry without the plugin's counts, whose group

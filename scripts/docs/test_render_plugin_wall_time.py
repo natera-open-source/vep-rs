@@ -295,6 +295,18 @@ def test_the_committed_benchmarks_page_is_the_page_its_record_gives():
     assert (ROOT / render.PAGE).read_text(encoding="utf-8") == page
 
 
+def measured_sha256(release, arch):
+    """The sha256 of the binary a release record measured on `arch`. A record measured at a commit other than
+    its `source_commit` states it under `binary_proof`; a record measured at `source_commit` holds no such
+    entry, and states the digest of the binary the plugin gate ran, which it marks as the measured build."""
+    proof = release["binary_proof"]
+    if proof.get("measured_commit_is_the_pushed_commit"):
+        gate = release["plugin_concordance"]["binaries"][arch]
+        assert gate["equal_to_measured"]["release"], arch
+        return gate["sha256"]
+    return proof[arch]["measured"]["sha256"]
+
+
 def test_the_committed_record_times_the_binaries_and_classes_the_release_record_measured():
     name, data = committed_record()
     releases = [json.loads(path.read_text(encoding="utf-8")) for path in sorted((ROOT / render.RECORDS).glob("*.json"))]
@@ -304,7 +316,7 @@ def test_the_committed_record_times_the_binaries_and_classes_the_release_record_
         assert {key: stated[key] for key in ("instance_type", "cpu", "host_vcpu_count", "local_nvme")} == {
             key: arch[key] for key in ("instance_type", "cpu", "host_vcpu_count", "local_nvme")
         }, name
-        assert data["engines"]["vep-rs"]["binary_sha256"][arch["arch"]] == release["binary_proof"][arch["arch"]]["measured"]["sha256"], name
+        assert data["engines"]["vep-rs"]["binary_sha256"][arch["arch"]] == measured_sha256(release, arch["arch"]), name
     assert data["engines"]["vep-rs"]["version"] == data["release"]
 
 

@@ -8,230 +8,230 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-11-23
+## [1.0.0] - 2026-11-24
 
 ### Added
 
 - Documentation, test corpora and comparison tools
   - The Benchmarks page tables each real-data plugin's wall time on genome-wide ClinVar for Ensembl VEP 116.2 and vep-rs 0.6.0, per architecture, written from a committed record. (#117)
-  - The Benchmarks page's plugin wall-time table states this release's figures against Ensembl VEP 116.3.
-  - A `--species` alias and the type words `<INS:ME:*>`, `<DEL:ME:*>` and `<DUP:TANDEM>` are tested through the binary, the type words against the golden corpora's Ensembl VEP rows.
-  - `crates/vep-cache-builder/README.md` states what becomes of `INSTALL.pl`'s `--HELP`, `--NO_PLUGINS`, `--SKIP_PLUGINS` and `--BIOPERL`, and a test of the builder's arguments proves it.
-  - `tests/genomes/` holds the genome table format, `tools/vep-genome-table` checks, reads and writes it, and `scripts/concordance/harness_genomes.tsv` holds the concordance harness's genomes as data.
-  - Ensembl VEP 116.3 is an accepted reference release of the comparison tools (vep-outputs-compare and vep-sv-compare), the release helper and the concordance harness scripts, beside 115.2 and 116.2.
-  - When a release moves its Ensembl VEP reference, the release page counts the documented divergences run again on it, those it corrects and those traced again in its source.
-  - Unit tests cover caches with and without variant, SIFT, PolyPhen and regulatory data, Ensembl Genomes cache versions and the T2T-CHM13 assembly name.
-  - Every genetic code Ensembl VEP translates with is tested codon by codon against a table generated from `Bio::Tools::CodonTable`, and each code a ready-made cache names through a transcript on it.
-  - Sequence names of non-human caches, their synonyms and organelle names are tested against Ensembl VEP's naming rules.
-  - `tools/vep-seeded-variants` writes about thirty input records for any converted cache, one for each situation of the genome check, the same bytes for the same cache and seed.
-  - pLI's transcript-set warning with `sigfig` before the mode word and OpenTargets' `0` cell are each held by a test.
-  - `scripts/genomes/check_genome.sh` checks one genome's ready-made cache against Ensembl VEP on about thirty generated records and writes the genome's row of `tests/genomes/`.
-  - `scripts/genomes/check_genome.sh` gives both engines `--use_given_ref` on a cache that names an alignment file, so the human RefSeq and merged caches are checked without a FASTA file.
-  - The `m.` HGVSg numbering, the RefSeq mitochondrial identifiers, the order of chromosome names and the rename of a bare `M` are tested on sequence names of genomes other than human.
-  - Variants at a sequence's ends, past its last base, at a circular origin and on a coding sequence cut off at a contig edge are tested against Ensembl VEP 116.3.
-  - The `GRCh38-regulatory` corpus carries the flag set `regulatory-shift-length` (`--regulatory --shift_3prime 1 --shift_length`), whose stored Ensembl VEP output holds `SHIFT_LENGTH` on the transcript rows alone.
-  - The corpus `GRCh38-everything-fasta` runs the `GRCh38-everything` records with a reference sequence of its own and compares `HGVSc`, `HGVSp` and `HGVS_OFFSET`.
-  - `vep-golden-corpus generated` writes and checks a manifest's `generated` block, and `select` keeps the block of the manifest it regenerates.
-  - A golden corpus for `plasmodium_falciparum` GCA000002765v3 compares both engines on chromosome 5, the apicoplast (genetic code table 11) and the mitochondrion (table 4) under the default flags, `--everything` and `--hgvs`.
-  - A golden corpus for fission yeast (`schizosaccharomyces_pombe`, ASM294v2) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 4.
-  - A golden corpus for the dog (`canis_lupus_familiaris`, ROS_Cfam_1.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the rhesus macaque (`macaca_mulatta`, Mmul_10) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`.
-  - A golden corpus for the nematode worm (`caenorhabditis_elegans`, WBcel235) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 5.
-  - `tests/golden/116/AgamP4-anopheles` is a golden corpus for the malaria mosquito Anopheles gambiae AgamP4, compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for Phytophthora infestans (`phytophthora_infestans`, ASM14294v1, Ensembl Protists release 63) holds 256 records on three supercontigs, compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`.
-  - A golden corpus for rice (`oryza_sativa`, IRGSP-1.0) under `tests/golden/116/IRGSP-1.0-rice` compares both engines on chromosome 9, the mitochondrion and the plastid under the default flags, `--everything` and `--hgvs --sift b`.
-  - `tests/golden/116/ARS-UI_Ramb_v3.0-sheep` is a golden corpus for the sheep on ARS-UI_Ramb_v3.0, compared with Ensembl VEP under the default flags, `--everything` and `--hgvs --sift b`.
-  - `tests/golden/116/Zm-B73-REFERENCE-NAM-5.0-maize` is a golden corpus for maize (`zea_mays`, Zm-B73-REFERENCE-NAM-5.0): 254 records compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the horse (`equus_caballus`, EquCab3.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`, its mitochondrion under genetic code table 2.
-  - `tests/golden/116/Amel_HAv3.1-honeybee` compares both engines on the honey bee (`apis_mellifera`, Amel_HAv3.1, Ensembl Metazoa 63) under the default flags, `--everything` and `--hgvs`.
-  - A golden corpus for cattle, `bos_taurus` ARS-UCD2.0 (`tests/golden/116/ARS-UCD2.0-cattle`), compares 342 records with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - `tests/golden/116/MorexV3_pseudomolecules_assembly-barley` is a golden corpus for barley (`hordeum_vulgare`, MorexV3_pseudomolecules_assembly): 252 records compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - `tests/golden/116/ARS1-goat` compares both engines on 266 records of the goat (`capra_hircus` ARS1) under the default flags, `--everything` and `--hgvs --sift b`.
-  - The pig (`sus_scrofa`, Sscrofa11.1) has a golden corpus, `tests/golden/116/Sscrofa11.1-pig`, comparing both engines under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the chimpanzee (`pan_troglodytes`, Pan_tro_3.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`.
-  - A golden corpus for the Atlantic salmon (`salmo_salar`, Ssal_v3.1) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`.
-  - `tests/golden/116/AaegL5-aedes` is a golden corpus for the yellow fever mosquito Aedes aegypti AaegL5, compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - `tests/golden/116/Sorghum_bicolor_NCBIv3-sorghum` is a golden corpus for Sorghum bicolor: 293 records compared with Ensembl VEP under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the chicken, `gallus_gallus` on bGalGal1.mat.broiler.GRCg7b, compares both engines on chromosome 25, the mitochondrion and a scaffold under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for bread wheat (`triticum_aestivum`, IWGSC) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - `tests/golden/116/F.catus_Fca126_mat1.0-cat` is a golden corpus for the cat, `felis_catus` on `F.catus_Fca126_mat1.0`: 220 records compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the zebrafish (`danio_rerio`, GRCz11) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the slime mould (`dictyostelium_discoideum`, dicty_2.7) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`.
-  - `tools/vep-genome-features` reads a converted cache and states the genome's features: genetic codes, biotypes, cut-off coding sequences, sequences, synonyms and the data the cache carries.
-  - `vep-genome-features gather` writes one table row a genome.
-  - The corpus `GRCh37-plugin-loftee-fixture` compares LoFTEE with the LoF plugin Ensembl VEP runs on GRCh37, on a synthetic GERP table.
-  - Golden corpora for the mouse RefSeq and merged caches (`mus_musculus` GRCm39) compare both engines under `--refseq` and `--merged`, each with and without `--hgvs`.
-  - A golden corpus for the sea squirt (`ciona_intestinalis`, KH) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 13.
-  - A golden corpus for the sand fly (`phlebotomus_papatasi`, PpapI1) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`.
-  - A golden corpus for the diplomonad Spironucleus salmonicida (`spironucleus_salmonicida`, GCA000497125v2) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, all under genetic code table 6.
-  - A golden corpus for the yeast Candida albicans (`candida_albicans`, GCA000182965v3) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, on genetic codes 12 and 4.
-  - A golden corpus for the crown-of-thorns starfish (`acanthaster_planci_gca001949145v1`, OKI_Apl_1.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 9.
-  - The corpus `GRCh37-plugin-loftee-fixture` gains a synthetic conservation database and the flag set `conservation-database`, which compares LoFTEE's PhyloCSF items with Ensembl VEP.
-  - `tests/golden/116/GRCr8-rat` is a golden corpus for the rat (`rattus_norvegicus`, GRCr8), compared under the default flags, `--everything` and `--hgvs --sift b`.
-  - `scripts/docs/site_build.py` builds the site and fails on an mdBook warning, such as an HTML tag a page leaves unclosed; the Pages job builds a pull request's pages through it.
-  - `vep-formats-compare` takes `--reference-release {115.2,116.2,116.3}`, 116.3 by default, and leaves a class unapplied under the Ensembl VEP release that corrects its defect.
-  - A golden corpus for the cattle merged cache (`bos_taurus`, ARS-UCD2.0) compares vep-rs with Ensembl VEP 116.3 under `--merged`, `--merged --everything` and `--merged --hgvs --sift b`.
-  - `vep-golden-corpus classify` reads the tab, VCF and JSON outputs of both engines (`--vep-tab`, `--vep-vcf`, `--vep-json` and their `--vep-rs-` twins) and writes a documented row's differing field under each format's name.
-  - The corpus `GRCh38-plugin-loftee-fixture` compares LoFTEE's PhyloCSF items on GRCh38 with Ensembl VEP from a synthetic conservation database, which `scripts/fixtures/loftee_conservation_database.py --branch grch38` writes.
-  - `tests/genomes/genomes.tsv` and `tests/genomes/bacteria.tsv.gz` hold a row for each of the 34,289 ready-made caches: its record count, its outcome and the digest of vep-rs's output.
-  - `scripts/genomes/test_genome.sh` checks any genome of the table in two modes, the `Genome check` workflow runs it by hand, and default tests hold the table to every ready-made cache.
-  - Every documented divergence names the code and tests that implement it, in its reproduction's `implementation` table, and the admission check refuses a change to that code declaring no divergence touched.
-  - The intended divergence `transcript_across_circular_origin` documents a transcript stored across the origin of a circular sequence, which Ensembl VEP annotates on neither side, in `docs/divergences/transcript-across-circular-origin.md`.
-  - The intended divergence `stats_existing_variants_check_frequency` documents the statistics report's `Novel / existing variants` row under `--check_frequency`, where Ensembl VEP counts every variant as existing, in `docs/divergences/stats-existing-variants-check-frequency.md`.
-  - The intended divergence `cache_variation_line_without_a_start` documents the known variants Ensembl VEP leaves unnamed behind a line of a cache's `all_vars.gz` whose start cell holds no number, which vep-rs names, in `docs/divergences/cache-variation-line-without-a-start.md`.
-  - The intended divergence `pachysolen_nuclear_code_read_as_standard` documents a transcript on genetic code 26, which Ensembl VEP translates under the standard code, in `docs/divergences/pachysolen-nuclear-code-read-as-standard.md`.
-  - The intended divergence `merged_same_dbid_collapse` documents the rows of a merged cache's transcript whose `dbID` a transcript of the other set carries, which Ensembl VEP drops under `--merged`, in `docs/divergences/merged-same-dbid-collapse.md`.
-  - `vep-stats-compare` holds the `Novel / existing variants` row of two statistics reports of a run under `--check_frequency` or `--filter_common` to the intended divergence `stats_existing_variants_check_frequency`.
-  - The report of `vep-stats-compare` lists each row it sets aside under `documented`.
-  - The corpus `GRCh38-refseq-intron-span` carries a record of `refseq_edited_model_intron_span_coding_reference`.
-  - The golden harness, `vep-golden-corpus classify` and the format comparator count that record's row under `refseq_edited_model_intron_span_coding_reference`, each from the row's own cells.
-  - The format comparator sets aside that row's `Consequence`, `Codons`, `Amino_acids` and `HGVSp`.
-  - The stop codon term of a split allele under `--minimal` is tested through the binary against Ensembl VEP's rows.
-  - `vep-parquet-to-tab --canonical --types-of PARQUET` reads a `--tab` output under the types of the Parquet output it is compared with: a column that output stores as strings stays as written.
-  - The comparison runner compares the two engines' statistics reports for a case that names `stats` among its formats.
-  - The comparison runner compares a case on a corpus manifest of several runs under one named run, read from the case's flags or from a table of named runs.
-  - The comparison runner refuses in preflight a case on such a manifest that names no run.
-  - The comparison runner's case table takes a `tool` column, whose rows compare Ensembl VEP's `filter_vep` with `vep filter` over an annotated input.
-  - A golden corpus for a human pangenome assembly (`homo_sapiens_gca009914755v4`, T2T-CHM13v2.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`.
-  - `vep-outputs-compare --json-cache <dir>` also reads the converted cache's transcripts where the reference ran under `--merged`.
-  - It sets aside the rows of the documented difference `merged_same_dbid_collapse` by a replay of Ensembl VEP's input buffers.
-  - `scripts/genomes/check_genome.sh` names the cache for a genome checked on its merged cache.
-  - `vep-outputs-compare --json-cache <dir>` also replays, where the reference ran under `--refseq` or `--merged`, the pass by which Ensembl VEP keeps one transcript per stable identifier among those a buffer loads.
-  - It sets aside the rows of the documented difference `merged_same_stable_id_collapse`, and a run the replay does not follow prints one warning line for each class it concerns.
-  - `scripts/genomes/check_genome.sh` names the cache for a genome checked on its RefSeq cache as well.
-  - `vep-outputs-compare` and `vep-sv-compare` set aside the pair of the intended divergence `pachysolen_nuclear_code_read_as_standard`, told by the rows' `Amino_acids` and `Codons`, and count it under that name.
-  - `vep-formats-compare` sets aside a `NEAREST` value under `nearest_start_site_one_base_above`, read with `--nearest-sites`; `docs/divergences/nearest-start-site-one-base-above.md` documents the divergence.
-  - The intended divergence `synonym_of_several_sequences_by_hash_order` documents the chromosome Ensembl VEP reads a record on whose name the synonyms give to several, by Perl's hash order, in `docs/divergences/synonym-of-several-sequences-by-hash-order.md`.
-  - `vep-outputs-compare --ensembl-cache` reads the reference run's cache and sets aside the reference's rows of a record under a name of several chromosomes where vep-rs wrote none; `scripts/genomes/check_genome.sh` names the cache.
-  - `vep-formats-compare` sets aside the rows of the entry `refseq_edited_model_equal_span_insertion_term` under a built-in class of that name: `Consequence` (`intergenic_variant` in Ensembl VEP, `missense_variant` in vep-rs) and the `IMPACT` each term gives.
-  - The `vep-formats-compare` class `refseq_edited_model_equal_span_insertion_term` applies to a `Transcript` row of an insertion as long as the bases an edited RefSeq model holds and the genome lacks.
-  - The `vep-formats-compare` class `refseq_edited_model_equal_span_insertion_term` reads an insertion under an identifier from the input records where the comparison is given them, and leaves bases a record replaces a difference.
-  - `vep-golden-corpus classify` writes the JSON end keys of a run under `--total_length`, and `vep-formats-compare` accepts them under the class `total_length_json_range_end`, which the oracle runner lists.
-  - On the cache's own genome, `vep-formats-compare` sets aside under the built-in class `use_transcript_ref_cache_cdna` the `USED_REF` Ensembl VEP reads one position off and the `Codons`, `Amino_acids`, `Consequence` and `IMPACT` that follow.
-  - The class also sets aside the `HGVSc` and `HGVSp` that follow, and leaves a JSON record's `most_severe_consequence` uncompared beside a `Consequence` it sets aside.
-  - The rows are one-base substitutions past the own edit of a RefSeq model whose alignment correction failed; the entry's page states both directions, the ten models and what stays compared.
-  - The intended divergence `alternate_codon_past_the_coding_end` documents the alternate codon Ensembl VEP cuts from a coding sequence with the 3' UTR joined on, and the residue it reads from it, in `docs/divergences/alternate-codon-past-the-coding-end.md`.
-  - `vep-formats-compare` sets aside, under the built-in class `alternate_codon_past_the_coding_end`, the `Codons` and `Amino_acids` of a row whose alternate codon Ensembl VEP reads into the 3' UTR.
-  - `vep-golden-corpus classify` asks the rule of `alternate_codon_past_the_coding_end` and compares a field named `Amino_acids` or `Codons` as the row's column.
-  - The corpus `GRCh37-plugin-loftee-fixture` carries rows of `loftee_gerp_walk_without_conservation_database`, which the comparisons set aside as a field class of the format comparison and the plugin scorer (`not met` in its class table).
-  - `loftee_gerp_walk_without_conservation_database` is also a class of the corpus tool's `classify`, and a name of the golden harness and of the comparison runner's mask list.
-  - The intended divergence `fasta_synonym_reads_another_mitochondrial_sequence` documents Ensembl VEP's read of a `chrM` FASTA record of another sequence for `MT` on GRCh37, in `docs/divergences/fasta-synonym-reads-another-mitochondrial-sequence.md`.
-  - `tools/vep-loftee-synthetic-conservation` writes, from a seed and a converted cache, a synthetic GERP table and a synthetic conservation database covering every exon, for comparing LoFTEE on GRCh37 with Ensembl VEP.
-  - The intended divergence `clin_sig_allele_list_order` documents the hash order of the lists in Ensembl VEP's `CLIN_SIG`, which vep-rs writes in the order of the row's known variants, in `docs/divergences/clin-sig-allele-list-order.md`.
-  - `vep-formats-compare --masks order_only` and the golden tests compare the `;`-joined term lists of `CLIN_SIG` as a multiset, each list whole.
-  - The intended divergence `json_mismatch_warning_names_no_record` documents the transcript-assembly mismatch warning of a `--json` run on a RefSeq or merged cache, which Ensembl VEP writes with no record name, in `docs/divergences/json-mismatch-warning-names-no-record.md`.
-  - `vep-formats-compare --warnings` sets aside the transcript-assembly mismatch warning that Ensembl VEP's `--json` run writes with no record name, beside vep-rs's named lines, as the class `json_mismatch_warning_names_no_record`.
-  - `vep-divergence-reevaluate` runs the further runs a reproduction record lists under `also`; the record and page of `contig_absent_from_fasta` give five `--hgvsg` rows on a contig the FASTA lacks.
-  - The intended divergence `custom_key_named_max_af` documents a `--custom` key named `MAX_AF` under `--max_af`, where Ensembl VEP writes neither the maximum frequency nor `MAX_AF_POPS`, in `docs/divergences/custom-key-named-max-af.md`.
-  - The Supported genomes page lists every genome with a ready-made Ensembl VEP cache and the outcome of its check, written from the table under `tests/genomes/` by `scripts/docs/render_supported_genomes.py`.
-  - `check_parity_matrix.py` accepts a named check of a shell test script, `scripts/[<dir>/]test_<name>.sh::<check>`, as a process row's `test1`.
-  - That check is the text its script gives, whole and quoted, as the first argument of `ok` or of a function that hands its first argument on to `ok`.
-  - The intended divergence `custom_key_list_shared_across_rows` documents a `--custom` key that spells a column or a flag field over a list of the input record, in `docs/divergences/custom-key-list-shared-across-rows.md`.
-  - Ensembl VEP gives every row of such a record that one list: another allele's frequency, a co-located identifier once for each row, `MANE_Select` on every row.
-  - The release figure's fifth panel counts the ready-made Ensembl VEP caches that are exact, of those checked, from the release record's `genome_checks`, and draws a cross on a comparator's row.
-  - The intended divergence `stats_consequences_custom_key_named_consequence` documents the `[Consequences (all)]` counts of the statistics report under a `--custom` source keyed `Consequence`, where Ensembl VEP counts a source record's name, in `docs/divergences/stats-consequences-custom-key-named-consequence.md`.
-  - `vep-stats-compare` holds a line of `[Consequences (all)]` that names no consequence type, in a run under a `--custom` source keyed `Consequence`, to the intended divergence `stats_consequences_custom_key_named_consequence`.
-  - The comparison runner reads `{plugins}` and `{generated}` in a flags cell beside a `manifest.json` as the corpus's `plugin_data` and `generated` directories, and refuses either word without a manifest.
-  - The comparison runner hands a case naming `spliceai_multi_entry_cell` the candidate's cache and each SpliceAI score file of its flags as `--spliceai-table`, and refuses the class beside flags that name none.
-  - The comparison runner leaves a population case listed in `oracle_cases_on_demand.tsv` beside the case table out of a run unless `--only` names it.
-  - `feature_oracle.sh --discover` reports which comparison classes apply to each case, in a `discovery.tsv` per case and for the run, and gives no verdict; `--discover-classes` narrows the classes asked for.
-  - The comparison runner times every engine run and comparison and records each case's rows compared, peak memory, work-disk use and wall minutes as a `sizing` block of `report.json` and `run.json`.
-  - The intended divergence `custom_key_named_ensp_under_protein_version` documents a `--custom` source named `ENSP` under `--protein_version` without `--protein`, where Ensembl VEP prints the memory address of the source's list, not its values, in `docs/divergences/custom-key-named-ensp-under-protein-version.md`.
-  - The intended divergence `hgvsp_frameshift_count_past_a_stop_read_as_a_residue`, with its page `docs/divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md` and its reproduction; `vep-formats-compare` sets such a pair aside under the class of that name where `--json-cache` gives it the candidate's cache.
-  - The intended divergence `file_beside_cache_chrm_transcripts_dropped` documents the rows of a GTF or GFF3's `chrM` transcripts that Ensembl VEP drops beside a cache, in `docs/divergences/file-beside-cache-chrm-transcripts-dropped.md`.
-  - The intended divergence `fasta_synonym_reads_another_mitochondrial_sequence` also covers a FASTA that holds `chrMT` beside `chrM`, where Ensembl VEP's reference checks read `chrM` for a record written `MT`.
-  - The intended divergence `clin_sig_allele_term_order` documents the order of one allele's ClinVar terms in `CLIN_SIG`, in `docs/divergences/clin-sig-allele-term-order.md`.
-  - Ensembl VEP takes that order from the keys of a hash when it reads its variation database; a cache `vep-cache-builder` builds takes it from the ClinVar records' identifiers.
-  - The intended divergence `mitochondrial_record_of_another_sequence_placed_on_mt` documents Ensembl VEP's placement of an input record written `chrM` on `MT` where the FASTA holds another sequence under that name, in `docs/divergences/mitochondrial-record-of-another-sequence-placed-on-mt.md`.
-  - The intended divergence `stop_codon_settled_before_unknown_bases` documents a stop codon an allele's known bases settle before its unknown bases, which Ensembl VEP does not read, in `docs/divergences/stop-codon-settled-before-unknown-bases.md`.
-  - `vep-formats-compare`, `vep-outputs-compare` and `vep-sv-compare` set aside the rows of the intended divergence `stop_codon_settled_before_unknown_bases`, told by the rows' `Codons` and `Amino_acids`, and count them under that name.
-  - `vep-formats-compare`, `vep-outputs-compare`, `vep-sv-compare` and `vep-plugin-pairs` read a row of the intended divergence `stop_codon_settled_before_unknown_bases` on which Ensembl VEP writes `stop_retained_variant` without making its stop codon test, counted under that name.
-  - `vep-plugin-pairs` sets aside an `NMD` or LoFTEE field that vep-rs alone writes on a row of the intended divergence `stop_codon_settled_before_unknown_bases`, under `plugin_value_follows_stop_codon_term_pair`.
-  - The intended divergence `clin_sig_allele_value_cut_at_semicolon` documents the later classifications of a ClinVar significance, which Ensembl VEP's cache leaves out of `CLIN_SIG`, in `docs/divergences/clin-sig-allele-value-cut-at-semicolon.md`.
-  - `vep-formats-compare` and `vep-golden-corpus classify` recognise `cnv_tr_symbolic_loss_named_a_gain`, and `classify` records a key several records share.
-  - The golden runner and `vep-formats-compare` keep comparing the rows of such a key on which the engines agree.
-  - The comparison runner's case table takes a `fasta` cell marked `unindexed:` or `unindexed-readonly:`, and every engine run gets a copy of the FASTA with no index beside it.
-  - The indexes the two engines write for such a case are compared byte for byte.
-  - The intended divergence `hgvsp_frameshift_with_no_changed_residue`, with its page `docs/divergences/hgvsp-frameshift-with-no-changed-residue.md` and its reproduction; `vep-formats-compare` and `vep-golden-corpus classify` set such a pair aside under the class of that name.
-  - The intended divergence `start_codon_removed_without_five_prime_utr` documents a start codon removed whole on a transcript without a 5' UTR, for which Ensembl VEP writes no start term, in `docs/divergences/start-codon-removed-without-five-prime-utr.md`.
-  - `vep-formats-compare`, `vep-outputs-compare` and `vep-sv-compare` set aside the rows of the intended divergence `start_codon_removed_without_five_prime_utr`, told by the rows' positions and `Amino_acids`, and count them under that name.
-  - `vep-formats-compare` sets aside, beside `--json-cache`, the rows and the protein notation of six classes of a coding end, each derived from the transcript's record, and none without the cache.
-  - `vep-outputs-compare` takes `--reference-fasta` and, with `vep-sv-compare` and `vep-golden-corpus`, reads the candidate's cache under every assembly.
-  - The three tools set a pair of a coding end aside only where the transcript's record shows no stop or start codon.
-  - The intended divergence `frameshift_inside_a_held_stop_codon`, with its page `docs/divergences/frameshift-inside-a-held-stop-codon.md` and its reproduction; `vep-outputs-compare`, `vep-sv-compare`, `vep-formats-compare`, `vep-golden-corpus classify` and `vep-plugin-pairs` set such a pair aside.
-  - `vep-formats-compare` accepts an `ALLELE_NUM` pair under the class `allele_number_repeated_or_reference_equal_alt`, read from the allele list both rows print, `vep-golden-corpus classify` writes its entries, and the oracle runner lists the class.
-  - A `field_divergences` entry of a corpus manifest may state `rows_alike`, the count of rows on its key on which both engines print one value.
-  - The golden tests, `vep-golden-corpus classify` and `vep-formats-compare` hold the rows that differ to the entry's value and the rows alike to that count.
-  - The intended divergence `start_codon_kept_without_five_prime_utr` documents a start codon an insertion or deletion leaves in place on a transcript with no 5' UTR, in `docs/divergences/start-codon-kept-without-five-prime-utr.md`.
-  - Ensembl VEP reads such a start codon as lost or gives the row no start term.
-  - `vep-formats-compare`, `vep-outputs-compare`, `vep-sv-compare` and `vep-plugin-pairs` set aside the rows of the intended divergence `start_codon_kept_without_five_prime_utr`, told by the rows' terms and their cDNA and CDS positions, counted under that name.
-  - The page `Versioning and compatibility` states what the version number covers, what may change in any release, and what a release asks of caches, plugin stores and plugins.
-  - `vep-formats-compare` sets aside the `HGVSp` of the intended divergence `hgvsp_start_codon_test_past_the_shifted_allele`, an insertion or deletion that `--shift_3prime 1` moves onto a start codon it leaves standing (`docs/divergences/hgvsp-start-codon-test-past-the-shifted-allele.md`).
+  - The Benchmarks page's plugin wall-time table states this release's figures against Ensembl VEP 116.3. (#124)
+  - A `--species` alias and the type words `<INS:ME:*>`, `<DEL:ME:*>` and `<DUP:TANDEM>` are tested through the binary, the type words against the golden corpora's Ensembl VEP rows. (#124)
+  - `crates/vep-cache-builder/README.md` states what becomes of `INSTALL.pl`'s `--HELP`, `--NO_PLUGINS`, `--SKIP_PLUGINS` and `--BIOPERL`, and a test of the builder's arguments proves it. (#124)
+  - `tests/genomes/` holds the genome table format, `tools/vep-genome-table` checks, reads and writes it, and `scripts/concordance/harness_genomes.tsv` holds the concordance harness's genomes as data. (#124)
+  - Ensembl VEP 116.3 is an accepted reference release of the comparison tools (vep-outputs-compare and vep-sv-compare), the release helper and the concordance harness scripts, beside 115.2 and 116.2. (#124)
+  - When a release moves its Ensembl VEP reference, the release page counts the documented divergences run again on it, those it corrects and those traced again in its source. (#124)
+  - Unit tests cover caches with and without variant, SIFT, PolyPhen and regulatory data, Ensembl Genomes cache versions and the T2T-CHM13 assembly name. (#124)
+  - Every genetic code Ensembl VEP translates with is tested codon by codon against a table generated from `Bio::Tools::CodonTable`, and each code a ready-made cache names through a transcript on it. (#124)
+  - Sequence names of non-human caches, their synonyms and organelle names are tested against Ensembl VEP's naming rules. (#124)
+  - `tools/vep-seeded-variants` writes about thirty input records for any converted cache, one for each situation of the genome check, the same bytes for the same cache and seed. (#124)
+  - pLI's transcript-set warning with `sigfig` before the mode word and OpenTargets' `0` cell are each held by a test. (#124)
+  - `scripts/genomes/check_genome.sh` checks one genome's ready-made cache against Ensembl VEP on about thirty generated records and writes the genome's row of `tests/genomes/`. (#124)
+  - `scripts/genomes/check_genome.sh` gives both engines `--use_given_ref` on a cache that names an alignment file, so the human RefSeq and merged caches are checked without a FASTA file. (#124)
+  - The `m.` HGVSg numbering, the RefSeq mitochondrial identifiers, the order of chromosome names and the rename of a bare `M` are tested on sequence names of genomes other than human. (#124)
+  - Variants at a sequence's ends, past its last base, at a circular origin and on a coding sequence cut off at a contig edge are tested against Ensembl VEP 116.3. (#124)
+  - The `GRCh38-regulatory` corpus carries the flag set `regulatory-shift-length` (`--regulatory --shift_3prime 1 --shift_length`), whose stored Ensembl VEP output holds `SHIFT_LENGTH` on the transcript rows alone. (#124)
+  - The corpus `GRCh38-everything-fasta` runs the `GRCh38-everything` records with a reference sequence of its own and compares `HGVSc`, `HGVSp` and `HGVS_OFFSET`. (#124)
+  - `vep-golden-corpus generated` writes and checks a manifest's `generated` block, and `select` keeps the block of the manifest it regenerates. (#124)
+  - A golden corpus for `plasmodium_falciparum` GCA000002765v3 compares both engines on chromosome 5, the apicoplast (genetic code table 11) and the mitochondrion (table 4) under the default flags, `--everything` and `--hgvs`. (#124)
+  - A golden corpus for fission yeast (`schizosaccharomyces_pombe`, ASM294v2) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 4. (#124)
+  - A golden corpus for the dog (`canis_lupus_familiaris`, ROS_Cfam_1.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the rhesus macaque (`macaca_mulatta`, Mmul_10) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`. (#124)
+  - A golden corpus for the nematode worm (`caenorhabditis_elegans`, WBcel235) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 5. (#124)
+  - `tests/golden/116/AgamP4-anopheles` is a golden corpus for the malaria mosquito Anopheles gambiae AgamP4, compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for Phytophthora infestans (`phytophthora_infestans`, ASM14294v1, Ensembl Protists release 63) holds 256 records on three supercontigs, compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`. (#124)
+  - A golden corpus for rice (`oryza_sativa`, IRGSP-1.0) under `tests/golden/116/IRGSP-1.0-rice` compares both engines on chromosome 9, the mitochondrion and the plastid under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `tests/golden/116/ARS-UI_Ramb_v3.0-sheep` is a golden corpus for the sheep on ARS-UI_Ramb_v3.0, compared with Ensembl VEP under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `tests/golden/116/Zm-B73-REFERENCE-NAM-5.0-maize` is a golden corpus for maize (`zea_mays`, Zm-B73-REFERENCE-NAM-5.0): 254 records compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the horse (`equus_caballus`, EquCab3.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`, its mitochondrion under genetic code table 2. (#124)
+  - `tests/golden/116/Amel_HAv3.1-honeybee` compares both engines on the honey bee (`apis_mellifera`, Amel_HAv3.1, Ensembl Metazoa 63) under the default flags, `--everything` and `--hgvs`. (#124)
+  - A golden corpus for cattle, `bos_taurus` ARS-UCD2.0 (`tests/golden/116/ARS-UCD2.0-cattle`), compares 342 records with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `tests/golden/116/MorexV3_pseudomolecules_assembly-barley` is a golden corpus for barley (`hordeum_vulgare`, MorexV3_pseudomolecules_assembly): 252 records compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `tests/golden/116/ARS1-goat` compares both engines on 266 records of the goat (`capra_hircus` ARS1) under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - The pig (`sus_scrofa`, Sscrofa11.1) has a golden corpus, `tests/golden/116/Sscrofa11.1-pig`, comparing both engines under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the chimpanzee (`pan_troglodytes`, Pan_tro_3.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`. (#124)
+  - A golden corpus for the Atlantic salmon (`salmo_salar`, Ssal_v3.1) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`. (#124)
+  - `tests/golden/116/AaegL5-aedes` is a golden corpus for the yellow fever mosquito Aedes aegypti AaegL5, compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `tests/golden/116/Sorghum_bicolor_NCBIv3-sorghum` is a golden corpus for Sorghum bicolor: 293 records compared with Ensembl VEP under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the chicken, `gallus_gallus` on bGalGal1.mat.broiler.GRCg7b, compares both engines on chromosome 25, the mitochondrion and a scaffold under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for bread wheat (`triticum_aestivum`, IWGSC) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `tests/golden/116/F.catus_Fca126_mat1.0-cat` is a golden corpus for the cat, `felis_catus` on `F.catus_Fca126_mat1.0`: 220 records compared with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the zebrafish (`danio_rerio`, GRCz11) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the slime mould (`dictyostelium_discoideum`, dicty_2.7) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`. (#124)
+  - `tools/vep-genome-features` reads a converted cache and states the genome's features: genetic codes, biotypes, cut-off coding sequences, sequences, synonyms and the data the cache carries. (#124)
+  - `vep-genome-features gather` writes one table row a genome. (#124)
+  - The corpus `GRCh37-plugin-loftee-fixture` compares LoFTEE with the LoF plugin Ensembl VEP runs on GRCh37, on a synthetic GERP table. (#124)
+  - Golden corpora for the mouse RefSeq and merged caches (`mus_musculus` GRCm39) compare both engines under `--refseq` and `--merged`, each with and without `--hgvs`. (#124)
+  - A golden corpus for the sea squirt (`ciona_intestinalis`, KH) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 13. (#124)
+  - A golden corpus for the sand fly (`phlebotomus_papatasi`, PpapI1) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - A golden corpus for the diplomonad Spironucleus salmonicida (`spironucleus_salmonicida`, GCA000497125v2) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, all under genetic code table 6. (#124)
+  - A golden corpus for the yeast Candida albicans (`candida_albicans`, GCA000182965v3) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, on genetic codes 12 and 4. (#124)
+  - A golden corpus for the crown-of-thorns starfish (`acanthaster_planci_gca001949145v1`, OKI_Apl_1.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`, its mitochondrion under genetic code table 9. (#124)
+  - The corpus `GRCh37-plugin-loftee-fixture` gains a synthetic conservation database and the flag set `conservation-database`, which compares LoFTEE's PhyloCSF items with Ensembl VEP. (#124)
+  - `tests/golden/116/GRCr8-rat` is a golden corpus for the rat (`rattus_norvegicus`, GRCr8), compared under the default flags, `--everything` and `--hgvs --sift b`. (#124)
+  - `scripts/docs/site_build.py` builds the site and fails on an mdBook warning, such as an HTML tag a page leaves unclosed; the Pages job builds a pull request's pages through it. (#124)
+  - `vep-formats-compare` takes `--reference-release {115.2,116.2,116.3}`, 116.3 by default, and leaves a class unapplied under the Ensembl VEP release that corrects its defect. (#124)
+  - A golden corpus for the cattle merged cache (`bos_taurus`, ARS-UCD2.0) compares vep-rs with Ensembl VEP 116.3 under `--merged`, `--merged --everything` and `--merged --hgvs --sift b`. (#124)
+  - `vep-golden-corpus classify` reads the tab, VCF and JSON outputs of both engines (`--vep-tab`, `--vep-vcf`, `--vep-json` and their `--vep-rs-` twins) and writes a documented row's differing field under each format's name. (#124)
+  - The corpus `GRCh38-plugin-loftee-fixture` compares LoFTEE's PhyloCSF items on GRCh38 with Ensembl VEP from a synthetic conservation database, which `scripts/fixtures/loftee_conservation_database.py --branch grch38` writes. (#124)
+  - `tests/genomes/genomes.tsv` and `tests/genomes/bacteria.tsv.gz` hold a row for each of the 34,289 ready-made caches: its record count, its outcome and the digest of vep-rs's output. (#124)
+  - `scripts/genomes/test_genome.sh` checks any genome of the table in two modes, the `Genome check` workflow runs it by hand, and default tests hold the table to every ready-made cache. (#124)
+  - Every documented divergence names the code and tests that implement it, in its reproduction's `implementation` table, and the admission check refuses a change to that code declaring no divergence touched. (#124)
+  - The intended divergence `transcript_across_circular_origin` documents a transcript stored across the origin of a circular sequence, which Ensembl VEP annotates on neither side, in `docs/divergences/transcript-across-circular-origin.md`. (#124)
+  - The intended divergence `stats_existing_variants_check_frequency` documents the statistics report's `Novel / existing variants` row under `--check_frequency`, where Ensembl VEP counts every variant as existing, in `docs/divergences/stats-existing-variants-check-frequency.md`. (#124)
+  - The intended divergence `cache_variation_line_without_a_start` documents the known variants Ensembl VEP leaves unnamed behind a line of a cache's `all_vars.gz` whose start cell holds no number, which vep-rs names, in `docs/divergences/cache-variation-line-without-a-start.md`. (#124)
+  - The intended divergence `pachysolen_nuclear_code_read_as_standard` documents a transcript on genetic code 26, which Ensembl VEP translates under the standard code, in `docs/divergences/pachysolen-nuclear-code-read-as-standard.md`. (#124)
+  - The intended divergence `merged_same_dbid_collapse` documents the rows of a merged cache's transcript whose `dbID` a transcript of the other set carries, which Ensembl VEP drops under `--merged`, in `docs/divergences/merged-same-dbid-collapse.md`. (#124)
+  - `vep-stats-compare` holds the `Novel / existing variants` row of two statistics reports of a run under `--check_frequency` or `--filter_common` to the intended divergence `stats_existing_variants_check_frequency`. (#124)
+  - The report of `vep-stats-compare` lists each row it sets aside under `documented`. (#124)
+  - The corpus `GRCh38-refseq-intron-span` carries a record of `refseq_edited_model_intron_span_coding_reference`. (#124)
+  - The golden harness, `vep-golden-corpus classify` and the format comparator count that record's row under `refseq_edited_model_intron_span_coding_reference`, each from the row's own cells. (#124)
+  - The format comparator sets aside that row's `Consequence`, `Codons`, `Amino_acids` and `HGVSp`. (#124)
+  - The stop codon term of a split allele under `--minimal` is tested through the binary against Ensembl VEP's rows. (#124)
+  - `vep-parquet-to-tab --canonical --types-of PARQUET` reads a `--tab` output under the types of the Parquet output it is compared with: a column that output stores as strings stays as written. (#124)
+  - The comparison runner compares the two engines' statistics reports for a case that names `stats` among its formats. (#124)
+  - The comparison runner compares a case on a corpus manifest of several runs under one named run, read from the case's flags or from a table of named runs. (#124)
+  - The comparison runner refuses in preflight a case on such a manifest that names no run. (#124)
+  - The comparison runner's case table takes a `tool` column, whose rows compare Ensembl VEP's `filter_vep` with `vep filter` over an annotated input. (#124)
+  - A golden corpus for a human pangenome assembly (`homo_sapiens_gca009914755v4`, T2T-CHM13v2.0) compares vep-rs with Ensembl VEP 116.3 under the default flags, `--everything` and `--hgvs`. (#124)
+  - `vep-outputs-compare --json-cache <dir>` also reads the converted cache's transcripts where the reference ran under `--merged`. (#124)
+  - It sets aside the rows of the documented difference `merged_same_dbid_collapse` by a replay of Ensembl VEP's input buffers. (#124)
+  - `scripts/genomes/check_genome.sh` names the cache for a genome checked on its merged cache. (#124)
+  - `vep-outputs-compare --json-cache <dir>` also replays, where the reference ran under `--refseq` or `--merged`, the pass by which Ensembl VEP keeps one transcript per stable identifier among those a buffer loads. (#124)
+  - It sets aside the rows of the documented difference `merged_same_stable_id_collapse`, and a run the replay does not follow prints one warning line for each class it concerns. (#124)
+  - `scripts/genomes/check_genome.sh` names the cache for a genome checked on its RefSeq cache as well. (#124)
+  - `vep-outputs-compare` and `vep-sv-compare` set aside the pair of the intended divergence `pachysolen_nuclear_code_read_as_standard`, told by the rows' `Amino_acids` and `Codons`, and count it under that name. (#124)
+  - `vep-formats-compare` sets aside a `NEAREST` value under `nearest_start_site_one_base_above`, read with `--nearest-sites`; `docs/divergences/nearest-start-site-one-base-above.md` documents the divergence. (#124)
+  - The intended divergence `synonym_of_several_sequences_by_hash_order` documents the chromosome Ensembl VEP reads a record on whose name the synonyms give to several, by Perl's hash order, in `docs/divergences/synonym-of-several-sequences-by-hash-order.md`. (#124)
+  - `vep-outputs-compare --ensembl-cache` reads the reference run's cache and sets aside the reference's rows of a record under a name of several chromosomes where vep-rs wrote none; `scripts/genomes/check_genome.sh` names the cache. (#124)
+  - `vep-formats-compare` sets aside the rows of the entry `refseq_edited_model_equal_span_insertion_term` under a built-in class of that name: `Consequence` (`intergenic_variant` in Ensembl VEP, `missense_variant` in vep-rs) and the `IMPACT` each term gives. (#124)
+  - The `vep-formats-compare` class `refseq_edited_model_equal_span_insertion_term` applies to a `Transcript` row of an insertion as long as the bases an edited RefSeq model holds and the genome lacks. (#124)
+  - The `vep-formats-compare` class `refseq_edited_model_equal_span_insertion_term` reads an insertion under an identifier from the input records where the comparison is given them, and leaves bases a record replaces a difference. (#124)
+  - `vep-golden-corpus classify` writes the JSON end keys of a run under `--total_length`, and `vep-formats-compare` accepts them under the class `total_length_json_range_end`, which the oracle runner lists. (#124)
+  - On the cache's own genome, `vep-formats-compare` sets aside under the built-in class `use_transcript_ref_cache_cdna` the `USED_REF` Ensembl VEP reads one position off and the `Codons`, `Amino_acids`, `Consequence` and `IMPACT` that follow. (#124)
+  - The class also sets aside the `HGVSc` and `HGVSp` that follow, and leaves a JSON record's `most_severe_consequence` uncompared beside a `Consequence` it sets aside. (#124)
+  - The rows are one-base substitutions past the own edit of a RefSeq model whose alignment correction failed; the entry's page states both directions, the ten models and what stays compared. (#124)
+  - The intended divergence `alternate_codon_past_the_coding_end` documents the alternate codon Ensembl VEP cuts from a coding sequence with the 3' UTR joined on, and the residue it reads from it, in `docs/divergences/alternate-codon-past-the-coding-end.md`. (#124)
+  - `vep-formats-compare` sets aside, under the built-in class `alternate_codon_past_the_coding_end`, the `Codons` and `Amino_acids` of a row whose alternate codon Ensembl VEP reads into the 3' UTR. (#124)
+  - `vep-golden-corpus classify` asks the rule of `alternate_codon_past_the_coding_end` and compares a field named `Amino_acids` or `Codons` as the row's column. (#124)
+  - The corpus `GRCh37-plugin-loftee-fixture` carries rows of `loftee_gerp_walk_without_conservation_database`, which the comparisons set aside as a field class of the format comparison and the plugin scorer (`not met` in its class table). (#124)
+  - `loftee_gerp_walk_without_conservation_database` is also a class of the corpus tool's `classify`, and a name of the golden harness and of the comparison runner's mask list. (#124)
+  - The intended divergence `fasta_synonym_reads_another_mitochondrial_sequence` documents Ensembl VEP's read of a `chrM` FASTA record of another sequence for `MT` on GRCh37, in `docs/divergences/fasta-synonym-reads-another-mitochondrial-sequence.md`. (#124)
+  - `tools/vep-loftee-synthetic-conservation` writes, from a seed and a converted cache, a synthetic GERP table and a synthetic conservation database covering every exon, for comparing LoFTEE on GRCh37 with Ensembl VEP. (#124)
+  - The intended divergence `clin_sig_allele_list_order` documents the hash order of the lists in Ensembl VEP's `CLIN_SIG`, which vep-rs writes in the order of the row's known variants, in `docs/divergences/clin-sig-allele-list-order.md`. (#124)
+  - `vep-formats-compare --masks order_only` and the golden tests compare the `;`-joined term lists of `CLIN_SIG` as a multiset, each list whole. (#124)
+  - The intended divergence `json_mismatch_warning_names_no_record` documents the transcript-assembly mismatch warning of a `--json` run on a RefSeq or merged cache, which Ensembl VEP writes with no record name, in `docs/divergences/json-mismatch-warning-names-no-record.md`. (#124)
+  - `vep-formats-compare --warnings` sets aside the transcript-assembly mismatch warning that Ensembl VEP's `--json` run writes with no record name, beside vep-rs's named lines, as the class `json_mismatch_warning_names_no_record`. (#124)
+  - `vep-divergence-reevaluate` runs the further runs a reproduction record lists under `also`; the record and page of `contig_absent_from_fasta` give five `--hgvsg` rows on a contig the FASTA lacks. (#124)
+  - The intended divergence `custom_key_named_max_af` documents a `--custom` key named `MAX_AF` under `--max_af`, where Ensembl VEP writes neither the maximum frequency nor `MAX_AF_POPS`, in `docs/divergences/custom-key-named-max-af.md`. (#124)
+  - The Supported genomes page lists every genome with a ready-made Ensembl VEP cache and the outcome of its check, written from the table under `tests/genomes/` by `scripts/docs/render_supported_genomes.py`. (#124)
+  - `check_parity_matrix.py` accepts a named check of a shell test script, `scripts/[<dir>/]test_<name>.sh::<check>`, as a process row's `test1`. (#124)
+  - That check is the text its script gives, whole and quoted, as the first argument of `ok` or of a function that hands its first argument on to `ok`. (#124)
+  - The intended divergence `custom_key_list_shared_across_rows` documents a `--custom` key that spells a column or a flag field over a list of the input record, in `docs/divergences/custom-key-list-shared-across-rows.md`. (#124)
+  - Ensembl VEP gives every row of such a record that one list: another allele's frequency, a co-located identifier once for each row, `MANE_Select` on every row. (#124)
+  - The release figure's fifth panel counts the ready-made Ensembl VEP caches that are exact, of those checked, from the release record's `genome_checks`, and draws a cross on a comparator's row. (#124)
+  - The intended divergence `stats_consequences_custom_key_named_consequence` documents the `[Consequences (all)]` counts of the statistics report under a `--custom` source keyed `Consequence`, where Ensembl VEP counts a source record's name, in `docs/divergences/stats-consequences-custom-key-named-consequence.md`. (#124)
+  - `vep-stats-compare` holds a line of `[Consequences (all)]` that names no consequence type, in a run under a `--custom` source keyed `Consequence`, to the intended divergence `stats_consequences_custom_key_named_consequence`. (#124)
+  - The comparison runner reads `{plugins}` and `{generated}` in a flags cell beside a `manifest.json` as the corpus's `plugin_data` and `generated` directories, and refuses either word without a manifest. (#124)
+  - The comparison runner hands a case naming `spliceai_multi_entry_cell` the candidate's cache and each SpliceAI score file of its flags as `--spliceai-table`, and refuses the class beside flags that name none. (#124)
+  - The comparison runner leaves a population case listed in `oracle_cases_on_demand.tsv` beside the case table out of a run unless `--only` names it. (#124)
+  - `feature_oracle.sh --discover` reports which comparison classes apply to each case, in a `discovery.tsv` per case and for the run, and gives no verdict; `--discover-classes` narrows the classes asked for. (#124)
+  - The comparison runner times every engine run and comparison and records each case's rows compared, peak memory, work-disk use and wall minutes as a `sizing` block of `report.json` and `run.json`. (#124)
+  - The intended divergence `custom_key_named_ensp_under_protein_version` documents a `--custom` source named `ENSP` under `--protein_version` without `--protein`, where Ensembl VEP prints the memory address of the source's list, not its values, in `docs/divergences/custom-key-named-ensp-under-protein-version.md`. (#124)
+  - The intended divergence `hgvsp_frameshift_count_past_a_stop_read_as_a_residue`, with its page `docs/divergences/hgvsp-frameshift-count-past-a-stop-read-as-a-residue.md` and its reproduction; `vep-formats-compare` sets such a pair aside under the class of that name where `--json-cache` gives it the candidate's cache. (#124)
+  - The intended divergence `file_beside_cache_chrm_transcripts_dropped` documents the rows of a GTF or GFF3's `chrM` transcripts that Ensembl VEP drops beside a cache, in `docs/divergences/file-beside-cache-chrm-transcripts-dropped.md`. (#124)
+  - The intended divergence `fasta_synonym_reads_another_mitochondrial_sequence` also covers a FASTA that holds `chrMT` beside `chrM`, where Ensembl VEP's reference checks read `chrM` for a record written `MT`. (#124)
+  - The intended divergence `clin_sig_allele_term_order` documents the order of one allele's ClinVar terms in `CLIN_SIG`, in `docs/divergences/clin-sig-allele-term-order.md`. (#124)
+  - Ensembl VEP takes that order from the keys of a hash when it reads its variation database; a cache `vep-cache-builder` builds takes it from the ClinVar records' identifiers. (#124)
+  - The intended divergence `mitochondrial_record_of_another_sequence_placed_on_mt` documents Ensembl VEP's placement of an input record written `chrM` on `MT` where the FASTA holds another sequence under that name, in `docs/divergences/mitochondrial-record-of-another-sequence-placed-on-mt.md`. (#124)
+  - The intended divergence `stop_codon_settled_before_unknown_bases` documents a stop codon an allele's known bases settle before its unknown bases, which Ensembl VEP does not read, in `docs/divergences/stop-codon-settled-before-unknown-bases.md`. (#124)
+  - `vep-formats-compare`, `vep-outputs-compare` and `vep-sv-compare` set aside the rows of the intended divergence `stop_codon_settled_before_unknown_bases`, told by the rows' `Codons` and `Amino_acids`, and count them under that name. (#124)
+  - `vep-formats-compare`, `vep-outputs-compare`, `vep-sv-compare` and `vep-plugin-pairs` read a row of the intended divergence `stop_codon_settled_before_unknown_bases` on which Ensembl VEP writes `stop_retained_variant` without making its stop codon test, counted under that name. (#124)
+  - `vep-plugin-pairs` sets aside an `NMD` or LoFTEE field that vep-rs alone writes on a row of the intended divergence `stop_codon_settled_before_unknown_bases`, under `plugin_value_follows_stop_codon_term_pair`. (#124)
+  - The intended divergence `clin_sig_allele_value_cut_at_semicolon` documents the later classifications of a ClinVar significance, which Ensembl VEP's cache leaves out of `CLIN_SIG`, in `docs/divergences/clin-sig-allele-value-cut-at-semicolon.md`. (#124)
+  - `vep-formats-compare` and `vep-golden-corpus classify` recognise `cnv_tr_symbolic_loss_named_a_gain`, and `classify` records a key several records share. (#124)
+  - The golden runner and `vep-formats-compare` keep comparing the rows of such a key on which the engines agree. (#124)
+  - The comparison runner's case table takes a `fasta` cell marked `unindexed:` or `unindexed-readonly:`, and every engine run gets a copy of the FASTA with no index beside it. (#124)
+  - The indexes the two engines write for such a case are compared byte for byte. (#124)
+  - The intended divergence `hgvsp_frameshift_with_no_changed_residue`, with its page `docs/divergences/hgvsp-frameshift-with-no-changed-residue.md` and its reproduction; `vep-formats-compare` and `vep-golden-corpus classify` set such a pair aside under the class of that name. (#124)
+  - The intended divergence `start_codon_removed_without_five_prime_utr` documents a start codon removed whole on a transcript without a 5' UTR, for which Ensembl VEP writes no start term, in `docs/divergences/start-codon-removed-without-five-prime-utr.md`. (#124)
+  - `vep-formats-compare`, `vep-outputs-compare` and `vep-sv-compare` set aside the rows of the intended divergence `start_codon_removed_without_five_prime_utr`, told by the rows' positions and `Amino_acids`, and count them under that name. (#124)
+  - `vep-formats-compare` sets aside, beside `--json-cache`, the rows and the protein notation of six classes of a coding end, each derived from the transcript's record, and none without the cache. (#124)
+  - `vep-outputs-compare` takes `--reference-fasta` and, with `vep-sv-compare` and `vep-golden-corpus`, reads the candidate's cache under every assembly. (#124)
+  - The three tools set a pair of a coding end aside only where the transcript's record shows no stop or start codon. (#124)
+  - The intended divergence `frameshift_inside_a_held_stop_codon`, with its page `docs/divergences/frameshift-inside-a-held-stop-codon.md` and its reproduction; `vep-outputs-compare`, `vep-sv-compare`, `vep-formats-compare`, `vep-golden-corpus classify` and `vep-plugin-pairs` set such a pair aside. (#124)
+  - `vep-formats-compare` accepts an `ALLELE_NUM` pair under the class `allele_number_repeated_or_reference_equal_alt`, read from the allele list both rows print, `vep-golden-corpus classify` writes its entries, and the oracle runner lists the class. (#124)
+  - A `field_divergences` entry of a corpus manifest may state `rows_alike`, the count of rows on its key on which both engines print one value. (#124)
+  - The golden tests, `vep-golden-corpus classify` and `vep-formats-compare` hold the rows that differ to the entry's value and the rows alike to that count. (#124)
+  - The intended divergence `start_codon_kept_without_five_prime_utr` documents a start codon an insertion or deletion leaves in place on a transcript with no 5' UTR, in `docs/divergences/start-codon-kept-without-five-prime-utr.md`. (#124)
+  - Ensembl VEP reads such a start codon as lost or gives the row no start term. (#124)
+  - `vep-formats-compare`, `vep-outputs-compare`, `vep-sv-compare` and `vep-plugin-pairs` set aside the rows of the intended divergence `start_codon_kept_without_five_prime_utr`, told by the rows' terms and their cDNA and CDS positions, counted under that name. (#124)
+  - The page `Versioning and compatibility` states what the version number covers, what may change in any release, and what a release asks of caches, plugin stores and plugins. (#124)
+  - `vep-formats-compare` sets aside the `HGVSp` of the intended divergence `hgvsp_start_codon_test_past_the_shifted_allele`, an insertion or deletion that `--shift_3prime 1` moves onto a start codon it leaves standing (`docs/divergences/hgvsp-start-codon-test-past-the-shifted-allele.md`). (#124)
 
 - Library crates
-  - `CustomAnnotations::new`, `CustomRecord::new`, `MotifFields::new`, `TranscriptSequences::new` and `LineTooLong::new` build their record from every field.
-  - `Assembly::ALL` and `InputFormat::ALL` list every variant, `ColumnType::stored_type_name` names a Parquet column's stored type, and `vep_io::output::parquet::Current` is exported.
-  - `regulatory::Motif::new`, `regulatory::Allele::new`, `TabixRecord::new`, `ContentIdentity::new` and `StorePaths::new` build their record from every field.
-  - `vep_cli` re-exports `prepass`, `resolve_fork`, `Runner`, `parse_vcf_line`, `parse_vcf_line_with`, `SourceType`, `NearestType`, `ColocationRules` and `VariationSource` at its root; their module paths keep working.
-  - `vep_cli::Config` implements `Default`, the configuration of a command line that gives no flag with nothing read from the host.
-  - `AnnotationResources::new` of `vep-cli` builds the resources of an annotator from its transcript indexes and effects settings.
-  - `vep-cache-builder` has a library whose documented interface is `gene_model` (`read`, `Format`, `GeneModel`, `OffRecord` and one constant), the reader `vep` reads a gene-model file with.
-  - The three types of the `vep-cache-builder` library are `#[non_exhaustive]` and its other modules are hidden.
+  - `CustomAnnotations::new`, `CustomRecord::new`, `MotifFields::new`, `TranscriptSequences::new` and `LineTooLong::new` build their record from every field. (#124)
+  - `Assembly::ALL` and `InputFormat::ALL` list every variant, `ColumnType::stored_type_name` names a Parquet column's stored type, and `vep_io::output::parquet::Current` is exported. (#124)
+  - `regulatory::Motif::new`, `regulatory::Allele::new`, `TabixRecord::new`, `ContentIdentity::new` and `StorePaths::new` build their record from every field. (#124)
+  - `vep_cli` re-exports `prepass`, `resolve_fork`, `Runner`, `parse_vcf_line`, `parse_vcf_line_with`, `SourceType`, `NearestType`, `ColocationRules` and `VariationSource` at its root; their module paths keep working. (#124)
+  - `vep_cli::Config` implements `Default`, the configuration of a command line that gives no flag with nothing read from the host. (#124)
+  - `AnnotationResources::new` of `vep-cli` builds the resources of an annotator from its transcript indexes and effects settings. (#124)
+  - `vep-cache-builder` has a library whose documented interface is `gene_model` (`read`, `Format`, `GeneModel`, `OffRecord` and one constant), the reader `vep` reads a gene-model file with. (#124)
+  - The three types of the `vep-cache-builder` library are `#[non_exhaustive]` and its other modules are hidden. (#124)
 
 - Caches, reference FASTA and the cache tools
-  - `vep-cache-builder --auto` installs a species of the Ensembl Genomes plants, metazoa, fungi or protists division from that site, `--release` naming the Ensembl Genomes release.
-  - `vep-cache-builder --auto` refuses a bacterial or archaeal genome, any genome of a collection, and a human pangenome assembly before any download, naming what the tree lacks and cache conversion.
-  - `vep-cache-builder` reads a species' core database name from the release's species list, or the `mysql/` listing, where it computed it from the assembly's trailing digits, wrong for most species.
-  - `--gff`, `--gtf` and `--custom file=<f>,format=gff|gtf` read a GFF3 or GTF beside the cache in one run, any number of files, each row of a file's transcript carrying `SOURCE=<short name>`.
-  - `--fasta` reads a razip-compressed FASTA through its `.fai`.
-  - A transcript the cache and a file read beside it both hold is written cache row first; Ensembl VEP's order changes between runs, a documented intended divergence, `file_beside_cache_same_id_row_order` (`docs/divergences/file-beside-cache-same-id-row-order.md`).
-  - `vep-cache-builder` ends a build that read no core table dumps on one line naming the columns the cache leaves empty, and `vep` names those a command asks for.
-  - `vep-cache-builder` says that a cache built from a GTF or GFF3 model names no source and counts the translations without a `protein_id`; `vep` says where `SOURCE` is empty.
-  - `vep-cache-builder` and `vep` say that a native cache's 1000 Genomes `AF` is recovered from the continental frequencies and can differ from the Ensembl cache's.
-  - `vep` names once the frequency columns and cells its command asks for and the cache does not carry, and the populations `MAX_AF` ranges over there.
-  - `vep-cache-builder` with `--output-dir` and `--include-variations` names the sequences it read no variation record on and the cells it reads from no file.
-  - `vep-cache-converter` says when the transcript files it copies hold no sequence edits, and `vep` and `vep recode` say so once on such a cache.
-  - A cache's `info.json` lists under `left_out` what the builder or the converter left out, which a run reads.
+  - `vep-cache-builder --auto` installs a species of the Ensembl Genomes plants, metazoa, fungi or protists division from that site, `--release` naming the Ensembl Genomes release. (#124)
+  - `vep-cache-builder --auto` refuses a bacterial or archaeal genome, any genome of a collection, and a human pangenome assembly before any download, naming what the tree lacks and cache conversion. (#124)
+  - `vep-cache-builder` reads a species' core database name from the release's species list, or the `mysql/` listing, where it computed it from the assembly's trailing digits, wrong for most species. (#124)
+  - `--gff`, `--gtf` and `--custom file=<f>,format=gff|gtf` read a GFF3 or GTF beside the cache in one run, any number of files, each row of a file's transcript carrying `SOURCE=<short name>`. (#124)
+  - `--fasta` reads a razip-compressed FASTA through its `.fai`. (#124)
+  - A transcript the cache and a file read beside it both hold is written cache row first; Ensembl VEP's order changes between runs, a documented intended divergence, `file_beside_cache_same_id_row_order` (`docs/divergences/file-beside-cache-same-id-row-order.md`). (#124)
+  - `vep-cache-builder` ends a build that read no core table dumps on one line naming the columns the cache leaves empty, and `vep` names those a command asks for. (#124)
+  - `vep-cache-builder` says that a cache built from a GTF or GFF3 model names no source and counts the translations without a `protein_id`; `vep` says where `SOURCE` is empty. (#124)
+  - `vep-cache-builder` and `vep` say that a native cache's 1000 Genomes `AF` is recovered from the continental frequencies and can differ from the Ensembl cache's. (#124)
+  - `vep` names once the frequency columns and cells its command asks for and the cache does not carry, and the populations `MAX_AF` ranges over there. (#124)
+  - `vep-cache-builder` with `--output-dir` and `--include-variations` names the sequences it read no variation record on and the cells it reads from no file. (#124)
+  - `vep-cache-converter` says when the transcript files it copies hold no sequence edits, and `vep` and `vep recode` say so once on such a cache. (#124)
+  - A cache's `info.json` lists under `left_out` what the builder or the converter left out, which a run reads. (#124)
 
 - Plugins
-  - A failed GERP read that Ensembl VEP's LoF plugin counts as 0 on GRCh37, where vep-rs fails the row, is a documented intended divergence, `loftee_gerp_read_error_counted_as_zero` (`docs/plugins/loftee-grch37.md`).
-  - LoFTEE reads a razip-compressed ancestral FASTA (`human_ancestor.fa.rz`), named under `human_ancestor_fa` or found in the working directory on GRCh37.
-  - LoFTEE reads the `conservation_file` database: whole-exon GERP totals on GRCh37, and the PhyloCSF items of `LoF_flags` and `LoF_info` on both assemblies.
-  - LoFTEE is compared with Ensembl VEP on GRCh37 on genome-wide ClinVar, gnomAD v2.1.1 and 1000 Genomes Phase 3, on synthetic conservation data, and the support table lists GRCh37.
+  - A failed GERP read that Ensembl VEP's LoF plugin counts as 0 on GRCh37, where vep-rs fails the row, is a documented intended divergence, `loftee_gerp_read_error_counted_as_zero` (`docs/plugins/loftee-grch37.md`). (#124)
+  - LoFTEE reads a razip-compressed ancestral FASTA (`human_ancestor.fa.rz`), named under `human_ancestor_fa` or found in the working directory on GRCh37. (#124)
+  - LoFTEE reads the `conservation_file` database: whole-exon GERP totals on GRCh37, and the PhyloCSF items of `LoF_flags` and `LoF_info` on both assemblies. (#124)
+  - LoFTEE is compared with Ensembl VEP on GRCh37 on genome-wide ClinVar, gnomAD v2.1.1 and 1000 Genomes Phase 3, on synthetic conservation data, and the support table lists GRCh37. (#124)
 
 - Output formats, columns and headers
-  - A run that writes a statistics report without a FASTA prints an `INFO:` line saying the `Distribution of variants on chromosome` charts are left out; `--quiet` withholds it.
-  - `vep_io::output::parquet::tab_column_types` names the type each tab column of a Parquet output is stored under, a string for a column stored as one whatever its name.
-  - `vep_io::output::parquet::UnpublishedOutput::is_named_by` and `holds` say whether a path leads to a run's output path or inside it, read through symbolic links as the file system resolves it.
-  - Ensembl VEP's ended run under a `--custom` key that spells a field it holds as a plain value, where vep-rs writes every row, is a documented intended divergence, `custom_key_named_as_a_plain_value_field` (`docs/divergences/custom-key-named-as-a-plain-value-field.md`).
+  - A run that writes a statistics report without a FASTA prints an `INFO:` line saying the `Distribution of variants on chromosome` charts are left out; `--quiet` withholds it. (#124)
+  - `vep_io::output::parquet::tab_column_types` names the type each tab column of a Parquet output is stored under, a string for a column stored as one whatever its name. (#124)
+  - `vep_io::output::parquet::UnpublishedOutput::is_named_by` and `holds` say whether a path leads to a run's output path or inside it, read through symbolic links as the file system resolves it. (#124)
+  - Ensembl VEP's ended run under a `--custom` key that spells a field it holds as a plain value, where vep-rs writes every row, is a documented intended divergence, `custom_key_named_as_a_plain_value_field` (`docs/divergences/custom-key-named-as-a-plain-value-field.md`). (#124)
 
 - Command line, configuration and errors
-  - `vep recode` prints one `INFO:` line naming what its cache does not give: the LRG mapping, the `Archive dbSNP` synonyms and, on an Ensembl-set cache, RefSeq notation.
-  - `--check_svs` prints one `INFO:` line naming the three kinds of known structural variant that Ensembl's structural variation file lacks; `--quiet` withholds it.
-  - `--debug` prints one `INFO:` line saying that it lists no plugin directories or plugin files; `--quiet` withholds it.
-  - `--transcript_filter` on `_source_cache` or `dbID` prints an `INFO:` line where a cache built from a GTF or GFF3, or a file read beside a cache, carries no such key.
-  - A `.fa` or `.fa.gz` passed over for want of its index, in the cache directory or a `--fasta` directory, is named in an `INFO:` line with what it lacks.
-  - Under `--hgvs`, a run ends with one `INFO:` line naming each chromosome the FASTA lacks on which a row it writes has no HGVSc that takes the sequence to read.
-  - Under `--hgvsg`, a run ends with one `INFO:` line naming each chromosome the FASTA lacks on which a row it writes is without its HGVSg for want of the sequence.
-  - Under `--hgvs`, one `INFO:` line at a run's end counts the insertion and deletion alleles whose notation, on a transcript edited away from the genome, is shifted along the genome.
-  - A VCF record whose ALT is `.` under a true INFO/SVTYPE, read as a non-variant record, draws a warning that names its line.
-  - Lines beginning with `#` in Ensembl-format, region or HGVS input, read as comments, are counted in one warning at the end of the input, with the first one's line number.
-  - `vep recode` writes its annotation run's `INFO:` lines for a FASTA file passed over, a chromosome the FASTA lacks and notations on edited transcripts, before its own line.
-  - `vep recode` writes the `--transcript_filter` `INFO:` line on `_source_cache` or `dbID` before its own.
-  - `vep recode` names in one `INFO:` line the fields among `id` and `var_synonyms` that stay unwritten over a cache without variation data, before its own line.
+  - `vep recode` prints one `INFO:` line naming what its cache does not give: the LRG mapping, the `Archive dbSNP` synonyms and, on an Ensembl-set cache, RefSeq notation. (#124)
+  - `--check_svs` prints one `INFO:` line naming the three kinds of known structural variant that Ensembl's structural variation file lacks; `--quiet` withholds it. (#124)
+  - `--debug` prints one `INFO:` line saying that it lists no plugin directories or plugin files; `--quiet` withholds it. (#124)
+  - `--transcript_filter` on `_source_cache` or `dbID` prints an `INFO:` line where a cache built from a GTF or GFF3, or a file read beside a cache, carries no such key. (#124)
+  - A `.fa` or `.fa.gz` passed over for want of its index, in the cache directory or a `--fasta` directory, is named in an `INFO:` line with what it lacks. (#124)
+  - Under `--hgvs`, a run ends with one `INFO:` line naming each chromosome the FASTA lacks on which a row it writes has no HGVSc that takes the sequence to read. (#124)
+  - Under `--hgvsg`, a run ends with one `INFO:` line naming each chromosome the FASTA lacks on which a row it writes is without its HGVSg for want of the sequence. (#124)
+  - Under `--hgvs`, one `INFO:` line at a run's end counts the insertion and deletion alleles whose notation, on a transcript edited away from the genome, is shifted along the genome. (#124)
+  - A VCF record whose ALT is `.` under a true INFO/SVTYPE, read as a non-variant record, draws a warning that names its line. (#124)
+  - Lines beginning with `#` in Ensembl-format, region or HGVS input, read as comments, are counted in one warning at the end of the input, with the first one's line number. (#124)
+  - `vep recode` writes its annotation run's `INFO:` lines for a FASTA file passed over, a chromosome the FASTA lacks and notations on edited transcripts, before its own line. (#124)
+  - `vep recode` writes the `--transcript_filter` `INFO:` line on `_source_cache` or `dbID` before its own. (#124)
+  - `vep recode` names in one `INFO:` line the fields among `id` and `var_synonyms` that stay unwritten over a cache without variation data, before its own line. (#124)
 
 ### Changed
 
 - Dependencies and tooling
   - Publishing a release publishes the nine crates to crates.io from the workflow `crates-io.yml` by trusted publishing, with no stored token; a rerun skips the crates already published. (#118)
   - The Bioconda recipe `bioconda/vep-rs` names 0.6.0 and drops its `duckdb-cli` run requirement: 0.6.0 writes Parquet without the `duckdb` program. (#116)
-  - CI builds the API documentation of the workspace and the tools with rustdoc warnings denied.
-  - The release workflow builds with `SOURCE_DATE_EPOCH` set to the commit's time, so the compile date and time the allocator records are the same in every build of a commit.
-  - `bench_plugins --buffer-size` cuts the variant list into batches of that many input records, each run summing its batches' times, and refuses a size of zero.
-  - `rusqlite` 0.43.0 with its `bundled` feature joins `vep-builtins` (it brings `libsqlite3-sys` 0.40.0, `fallible-iterator` 0.3.0 and `fallible-streaming-iterator` 0.1.9), and `vep-fasta` depends on `flate2`.
-  - The crates on crates.io ship without their test files, and the descriptions of `vep-cli` and `vep-cache-converter` name vep-rs and Ensembl VEP.
-  - The `crates.io` workflow waits for the index between uploads, reads every version back, and uploads from a manual start only on request, from a tag whose release is published.
-  - CI holds the documented public interface of the library crates and each package's features to the record under `tests/public-interface/`, which `scripts/check_public_interface.py --update` writes again.
+  - CI builds the API documentation of the workspace and the tools with rustdoc warnings denied. (#124)
+  - The release workflow builds with `SOURCE_DATE_EPOCH` set to the commit's time, so the compile date and time the allocator records are the same in every build of a commit. (#124)
+  - `bench_plugins --buffer-size` cuts the variant list into batches of that many input records, each run summing its batches' times, and refuses a size of zero. (#124)
+  - `rusqlite` 0.43.0 with its `bundled` feature joins `vep-builtins` (it brings `libsqlite3-sys` 0.40.0, `fallible-iterator` 0.3.0 and `fallible-streaming-iterator` 0.1.9), and `vep-fasta` depends on `flate2`. (#124)
+  - The crates on crates.io ship without their test files, and the descriptions of `vep-cli` and `vep-cache-converter` name vep-rs and Ensembl VEP. (#124)
+  - The `crates.io` workflow waits for the index between uploads, reads every version back, and uploads from a manual start only on request, from a tag whose release is published. (#124)
+  - CI holds the documented public interface of the library crates and each package's features to the record under `tests/public-interface/`, which `scripts/check_public_interface.py --update` writes again. (#124)
 
 - Documentation, test corpora and comparison tools
   - The installation, limitations and workflow-managers pages state the Bioconda package `vep-rs`, its install line and that the channel's version can trail a release. (#117)
@@ -239,593 +239,598 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The contributor guide counts two forms of the model declaration, a model's line and the line for a change written without one, as the admission check reads them. (#117)
   - The Benchmarks page names the two fastVEP records measured without `--exclude-readthrough --exclude-artifact`, and a saved link to its 0.5.0 section anchor reaches the section. (#117)
   - Release-site page titles are fitted to 25 to 60 characters: a short title ends ` - vep-rs documentation`, a long one drops its ending or is cut at a word. (#120)
-  - `vep-divergence-reevaluate --check` refuses an index whose `cache transcripts` cells name more than one total.
-  - The release figure's caption and alternative text call a wall-time cell a dataset or a separately timed part of one, and a plugin row's figure the sum of per-feature entries.
-  - The GRCh37 HGVS corpus carries fabricated identifiers in place of identifiers under restricted redistribution terms, and the corpus builder substitutes them when it writes a corpus.
-  - The concordance harness reads each genome's FASTA, converted cache and cache version from `scripts/concordance/harness_genomes.tsv`; a genome with a row runs with no script edit.
-  - `plugin_data_layout.sh` refuses an assembly it has no data file for instead of reading it as GRCh38.
-  - Help text, messages and pages name Ensembl VEP, datasets and defects in the project's own words.
-  - The plugins page gives the data terms of dbscSNV, MaxEntScan, SpliceVault and SpliceAI's Ensembl-derived file as each plugin's module states them.
-  - The golden corpora's expected outputs are written by Ensembl VEP 116.3.
-  - The golden corpora compared on synthetic plugin files all end in `-fixture`: the CADD, CADD-SV, dbNSFP, dbscSNV, SpliceAI and AVI directories take the ending.
-  - A corpus's provenance record lists its tables of made-up values under `synthetic_tables`.
-  - Every comparator and scorer under `scripts/` is a Rust tool under `tools/` that runs across the host's cores; the Python programs, their tests and their switch variables are removed.
-  - Fixture READMEs and tests recording which Ensembl VEP release wrote their plugin, `--custom` and co-located rows name 116.3, which writes the same rows; a test holds the READMEs to it.
-  - The UTRAnnotator pair-order page counts its ClinVar chromosome 21 rows over ten runs of Ensembl VEP 116.3 and says how many of them vep-rs writes; a test holds the paragraph.
-  - `vep-outputs-compare` scores under Ensembl VEP 116.3 when no reference release is named.
-  - The plugins page gives the data terms of EVE and of LoFTEE's GRCh37 GERP table as each plugin's own text states them.
-  - The plugins page defines "terms not stated by the plugin" by the plugin's module; the help of `scripts/fixtures/make_plugin_fixture.py` gives the dbNSFP and dbscSNV terms the same way.
-  - The LoFTEE page and the `vep-builtins` README describe the GRCh37 GERP file by what the `master` branch of Ensembl VEP's LoF plugin reads and by what vep-rs needs.
-  - The page cites `LoF.pm` lines 132 and 138-141 and `gerp_dist.pl` lines 92-96 and 119-121 for it.
-  - `vep-outputs-compare` takes its sequence-name set from a named list or, with `--json-cache`, from a converted cache's `contig_order` for any assembly; the human set stays the default under GRCh37 and GRCh38.
-  - The breakend synonym class of `vep-outputs-compare` reads the same names and counts the rows it could not judge where a run gives none.
-  - `vep-formats-compare` reads every genetic code vep-rs reads, each as its engine reads it.
-  - `vep-formats-compare` ends with an error that names the transcript where a cache names a code it holds no table for.
-  - `vep-sv-compare` scores under Ensembl VEP 116.3 when no reference release is named.
-  - The page of `organelle_peptide_paths_translation_table` says the class reaches every transcript under a genetic code other than the standard one, nuclear ones included, and lists the corpora that document it.
-  - The insertion range page counts the golden corpora that record `stop_codon_overlap_insertion_range` as the committed manifests hold them, ten corpora and 271 entries over their runs; a test holds both sentences.
-  - The page of `stop_retained_three_base_stop_codon_test` counts the rows the committed golden corpus manifests list, 42 in nine corpora over the default runs and four flag sets; a test holds both sentences.
-  - The page of `stop_codon_removed_without_stop_codon_test` counts the corpus entries of the class as the committed manifests hold them, 593 in 19 corpora; a test holds the sentence.
-  - The page of `file_cache_honours_gencode_basic` states the row counts of its GRCh38 GFF3 slice under Ensembl VEP 116.3 beside those of 116.2, and names the slice file and the records.
-  - The workflow-managers page says what a program that collects reports reads from the statistics report the nf-core module gives as its `*.html` output; a test holds the sentence.
-  - Pages, comments, help text and source citations name Ensembl VEP 116.3 as the reference release.
-  - The measurement scripts take `--datasets`, the corpus tool takes `--dataset` and `--multi-allelic-per-dataset`, and corpus manifests carry the keys `dataset`, `datasets` and `multi_allelic_per_dataset`.
-  - The tests of `tools/vep-divergence-reevaluate` hold every `prepare` step of a reproduction to paths the repository holds, a file read through a directory the step mounts into a container included.
-  - The page of `hgvs_shift_sequence_edge_window` gains a worked example of a 3' walk that runs past the shift the sequence admits and changes an `HGVSp` (`docs/divergences/hgvs-shift-near-sequence-edge.md`).
-  - Scripts, tools and pages say Ensembl VEP for the reference implementation and keep Perl for the language and for Ensembl's source files.
-  - The page of `hgvs_shift_shared_across_alleles` states that no committed corpus holds a row of the class and what its index row counts; a test holds the sentences.
-  - The statistics counts page and the `stats_variant_classes_minimal` index row say a record resolved from a variant identifier keeps its stored class under `--minimal` in both engines; a test holds both.
-  - The DosageSensitivity section of `docs/plugins/flat-file.md` counts the nine regulatory and motif rows both engines write on its worked run; a test holds both sentences to the corpus.
-  - The page of `hgvs_shift_sequence_edge_window` says what the counts of its first example count: the 27 forward-strand rows, the four ClinVar records and their 20 rows; a test holds the sentences.
-  - The page of `hgvs_shift_sequence_edge_window` names the row of its long deletion whose terms differ, the inputs holding records of the class and what a comparison reports under the shift flags.
-  - `vep-formats-compare` sets aside a field of nine plugins that vep-rs alone fills from a lower-case table row, as the class `tabix_allele_case_insensitive_match`.
-  - `make_plugin_fixture.py` names the dbNSFP and dbscSNV layouts alone; `plugin_score_fixtures.py` writes the CADD and SpliceAI files.
-  - `spliceai_multi_entry_cell` also reads a gene that several entries of one score record name (`docs/divergences/spliceai-several-entries-of-one-gene.md`), and both SpliceAI fixture corpora carry six such records.
-  - The index gains `dbscsnv_file_without_gene_column`, on `docs/divergences/dbscsnv-file-without-gene-column.md`: dbscSNV reads a file whose header lacks `Ensembl_gene`, a column Ensembl VEP's plugin requires and never reads.
-  - The index gains `maxentscan_matrix_line_not_a_number`, on `docs/divergences/maxentscan-matrix-line-not-a-number.md`: a matrix line Perl converts only under a warning is refused where Ensembl VEP's plugin scores from it.
-  - The page of `json_non_finite_number_token`, `docs/divergences/json-non-finite-number-token.md`, names a score MaxEntScan prints as `Inf`, `-Inf` or `NaN`, a bare token in Ensembl VEP's JSON output.
-  - `scripts/fixtures/plugin_score_fixtures.py --entry-order` writes a SpliceAI score record whose entries name one symbol several times, with equal or with other scores.
-  - `scripts/fixtures/maxentscan_fixture_matrices.py --whole-numbers` writes whole-number matrices, with each 23-mer of `--boundary-kmers` at a rounding boundary that exact and double products print differently.
-  - `hgvsp_stop_codon_protein_comparison` gains a tenth shape, Ensembl VEP's empty `HGVSp` against the stop unchanged, in section 10 of `docs/divergences/hgvsp-stop-codon-protein-comparison.md` and in the entry's reproduction.
-  - `stop_codon_overlap_insertion_range` reads an in-frame insertion holding an unknown base beside `splice_region_variant`, section 2 of `docs/divergences/stop-codon-overlap-insertion-range.md`.
-  - `hgvs_shifted_indel_written_span_gate` reads the `REFSEQ_OFFSET` vep-rs alone writes beside its notation on an edited model, section 4 of `docs/divergences/hgvs-shifted-indel-written-span-gate.md`.
-  - `hgvs_clipped_reference_against_whole_alternate` reads Ensembl VEP's slid coordinate and respelled reference allele on an edited model, section 8 of `docs/divergences/hgvs-clipped-reference-against-whole-alternate.md`.
-  - `hgvs_shifted_insertion_clamped_end` reads the clamped notations Ensembl VEP respells on a model that carries an edit, section 2 of `docs/divergences/hgvs-shifted-insertion-clamped-end.md`.
-  - `docs/divergences/refseq-edited-model-hgvsc.md` section 3 describes a deletion over an edited model's first base that runs across an edit, a pair the format comparator leaves a difference.
-  - The index row and the page of `json_non_finite_number_token` name a value, a table's cell or a score a plugin prints, where they named a cell alone.
-  - `utrannotator_frameshift_at_stop_boundary` also covers an upstream ORF that keeps its length, which Ensembl VEP lists as shifted (`docs/divergences/utrannotator-frameshift-at-stop-boundary.md`).
-  - `utrannotator_lost_stop_written_before_stop_codon` also covers an insertion written at a stop codon's first base and one that leaves the stop codon whole in frame (`docs/divergences/utrannotator-lost-stop-written-before-stop-codon.md`).
-  - `utrannotator_gained_start_window` also covers a gained start named before the record's own insertion point (`docs/divergences/utrannotator-gained-start-window-comparison.md`).
-  - `utrannotator_structural_allele_text` also covers an annotated inversion and the loss alternate of several (`docs/output/structural-variants.md`).
-  - The documented difference `dbnsfp_mitochondrial_record_named_m` is added, with its page `docs/divergences/dbnsfp-mitochondrial-record-named-m.md`, reproduction and comparison class.
-  - `plugin_contig_mitochondrial_spelling` takes a tabix-backed plugin's field the candidate alone fills on a mitochondrial record on GRCh37 as on GRCh38; its page describes the check.
-  - The entry `loftee_gerp_walk_without_conservation_database` reads tier 2 in `docs/intended-divergences.md`, and its page names the corpus that carries its rows and the comparisons that apply the class.
-  - The comparison tools set aside `splice_term_past_the_record_span` for an allele that opens with a one-base reference allele, and read the class on rows printed under `--terms display`.
-  - The corpora `GRCh37-output-flags` and `GRCh37-plugin-spliceai-fixture` document one record each under `splice_term_past_the_record_span`.
-  - The stop codon class of the format comparator and corpus tool reads Ensembl VEP's residues and stop inserted before an earlier residue against vep-rs's stop unchanged, beside the candidate's cache.
-  - The comparison class `hgvs_insertion_left_where_the_shift_stops` takes the `HGVSp` of a row it reads, in `vep-formats-compare`, and the intended divergence's page covers it.
-  - A `vep-formats-compare field-class` question of `hgvs_shift_sequence_edge_window` has 24 columns, nine cells a row, and `vep-golden-corpus classify` asks it so.
-  - `vep-formats-compare` reads under `hgvsp_shifted_indel_written_span_gate` a stop written as unchanged or extended, also on a `cds_start_NF` transcript, and a shift longer than its coordinate, counted from `--json-cache`.
-  - The Other species page tables every species with a golden corpus and gives a worked example for each set of ready-made caches.
-  - Its new examples are an Ensembl Protists species, a genome of a bacterial and of a fungal collection and a human pangenome assembly.
-  - The README states which genomes are compared with Ensembl VEP: human on whole genomes, other species with a golden corpus, every other ready-made cache on a small generated input.
-  - The variation data section of the Cache setup page stands on a page of its own, Variation data in a native cache.
-  - The Cache setup page gives the form of another genome wherever a step differs by genome.
-  - The corpus tool's messages and the value labels of its help say `dataset`.
-  - The reproduction of `refseq_edited_model_shifted_insertion_bases` runs under `--refseq --hgvs` beside its `--shift_3prime 1` run, and the page's table names the 5' UTR record on `NM_001395858.1`.
-  - The reproduction of `refseq_edited_model_seam_insertion_hgvsc` runs records of all three forms of the entry, and its page gives both engines' `HGVSc` for the two records added.
-  - The `<CNV:TR>` page says both engines repeat a repeat unit that is not DNA across the run with a FASTA and keep it symbolic without one; a test holds it.
-  - The `<CNV:TR>` pages say what a multi-allelic record gives with and without a FASTA and that the comparison pairs its readings only where vep-rs's is symbolic; tests hold it.
-  - The `<CNV:TR>` page and the divergence-class taxonomy say which engine and which run write each stop term of a tandem repeat that ends past its transcript; a test holds them.
-  - The Arabidopsis thaliana section of the Other species page gives the `vep-cache-builder --auto` command beside the cache conversion and quotes the warning its installation prints.
-  - The Other species page says that a record past position 536,870,912 is annotated like any other and that known-variant and `--custom` files are read through a `.csi` index.
-  - The page and the reproduction of `loftee_gerp_walk_without_conservation_database` name the made-up GERP table they build `GERP_scores.synthetic.txt.gz`, and a test holds both to that name.
-  - The LoFTEE page's section on the ancestral-allele filter cites the routine at its lines on both branches of Ensembl VEP's LoF plugin, `grch38` and the `master` branch run on GRCh37.
-  - The Defect A page names its rule `covered_splice_region_swap` wherever it speaks of it, and states a differing region of an allele of another length by the page's own definition.
-  - The `HGVSc` position Ensembl VEP writes past the own edit of a failed-edit RefSeq model is a documented intended divergence, `refseq_failed_edit_model_hgvsc_offset`, with a class in `vep-formats-compare`.
-  - The cache pages say which file an installation reads each cell from and where an installed cache differs from Ensembl VEP's own.
-  - `vep-formats-compare` and `vep-golden-corpus classify` read under `cnv_tr_symbolic_loss_named_a_gain` a `tandem_repeat` row that names no direction term where the reference names `feature_elongation`, with the IMPACT its terms give.
-  - `vep-sv-compare` takes such a `tandem_repeat` row as the dropped allele's behind a leading allele of no repeat sequence.
-  - The embedding page states the library surface as what the API documentation of `vep-cli` shows, lists the items the crate root re-exports and points to the versioning page.
-  - The CLI reference states that a unique prefix is resolved against the flags of the release that reads it, and that `--help` leaves out the flags marked `(hidden)`.
+  - `vep-divergence-reevaluate --check` refuses an index whose `cache transcripts` cells name more than one total. (#124)
+  - The release figure's caption and alternative text call a wall-time cell a dataset or a separately timed part of one, and a plugin row's figure the sum of per-feature entries. (#124)
+  - The GRCh37 HGVS corpus carries fabricated identifiers in place of identifiers under restricted redistribution terms, and the corpus builder substitutes them when it writes a corpus. (#124)
+  - The concordance harness reads each genome's FASTA, converted cache and cache version from `scripts/concordance/harness_genomes.tsv`; a genome with a row runs with no script edit. (#124)
+  - `plugin_data_layout.sh` refuses an assembly it has no data file for instead of reading it as GRCh38. (#124)
+  - Help text, messages and pages name Ensembl VEP, datasets and defects in the project's own words. (#124)
+  - The plugins page gives the data terms of dbscSNV, MaxEntScan, SpliceVault and SpliceAI's Ensembl-derived file as each plugin's module states them. (#124)
+  - The golden corpora's expected outputs are written by Ensembl VEP 116.3. (#124)
+  - The golden corpora compared on synthetic plugin files all end in `-fixture`: the CADD, CADD-SV, dbNSFP, dbscSNV, SpliceAI and AVI directories take the ending. (#124)
+  - A corpus's provenance record lists its tables of made-up values under `synthetic_tables`. (#124)
+  - Every comparator and scorer under `scripts/` is a Rust tool under `tools/` that runs across the host's cores; the Python programs, their tests and their switch variables are removed. (#124)
+  - Fixture READMEs and tests recording which Ensembl VEP release wrote their plugin, `--custom` and co-located rows name 116.3, which writes the same rows; a test holds the READMEs to it. (#124)
+  - The UTRAnnotator pair-order page counts its ClinVar chromosome 21 rows over ten runs of Ensembl VEP 116.3 and says how many of them vep-rs writes; a test holds the paragraph. (#124)
+  - `vep-outputs-compare` scores under Ensembl VEP 116.3 when no reference release is named. (#124)
+  - The plugins page gives the data terms of EVE and of LoFTEE's GRCh37 GERP table as each plugin's own text states them. (#124)
+  - The plugins page defines "terms not stated by the plugin" by the plugin's module; the help of `scripts/fixtures/make_plugin_fixture.py` gives the dbNSFP and dbscSNV terms the same way. (#124)
+  - The LoFTEE page and the `vep-builtins` README describe the GRCh37 GERP file by what the `master` branch of Ensembl VEP's LoF plugin reads and by what vep-rs needs. (#124)
+  - The page cites `LoF.pm` lines 132 and 138-141 and `gerp_dist.pl` lines 92-96 and 119-121 for it. (#124)
+  - `vep-outputs-compare` takes its sequence-name set from a named list or, with `--json-cache`, from a converted cache's `contig_order` for any assembly; the human set stays the default under GRCh37 and GRCh38. (#124)
+  - The breakend synonym class of `vep-outputs-compare` reads the same names and counts the rows it could not judge where a run gives none. (#124)
+  - `vep-formats-compare` reads every genetic code vep-rs reads, each as its engine reads it. (#124)
+  - `vep-formats-compare` ends with an error that names the transcript where a cache names a code it holds no table for. (#124)
+  - `vep-sv-compare` scores under Ensembl VEP 116.3 when no reference release is named. (#124)
+  - The page of `organelle_peptide_paths_translation_table` says the class reaches every transcript under a genetic code other than the standard one, nuclear ones included, and lists the corpora that document it. (#124)
+  - The insertion range page counts the golden corpora that record `stop_codon_overlap_insertion_range` as the committed manifests hold them, ten corpora and 271 entries over their runs; a test holds both sentences. (#124)
+  - The page of `stop_retained_three_base_stop_codon_test` counts the rows the committed golden corpus manifests list, 42 in nine corpora over the default runs and four flag sets; a test holds both sentences. (#124)
+  - The page of `stop_codon_removed_without_stop_codon_test` counts the corpus entries of the class as the committed manifests hold them, 593 in 19 corpora; a test holds the sentence. (#124)
+  - The page of `file_cache_honours_gencode_basic` states the row counts of its GRCh38 GFF3 slice under Ensembl VEP 116.3 beside those of 116.2, and names the slice file and the records. (#124)
+  - The workflow-managers page says what a program that collects reports reads from the statistics report the nf-core module gives as its `*.html` output; a test holds the sentence. (#124)
+  - Pages, comments, help text and source citations name Ensembl VEP 116.3 as the reference release. (#124)
+  - The measurement scripts take `--datasets`, the corpus tool takes `--dataset` and `--multi-allelic-per-dataset`, and corpus manifests carry the keys `dataset`, `datasets` and `multi_allelic_per_dataset`. (#124)
+  - The tests of `tools/vep-divergence-reevaluate` hold every `prepare` step of a reproduction to paths the repository holds, a file read through a directory the step mounts into a container included. (#124)
+  - The page of `hgvs_shift_sequence_edge_window` gains a worked example of a 3' walk that runs past the shift the sequence admits and changes an `HGVSp` (`docs/divergences/hgvs-shift-near-sequence-edge.md`). (#124)
+  - Scripts, tools and pages say Ensembl VEP for the reference implementation and keep Perl for the language and for Ensembl's source files. (#124)
+  - The page of `hgvs_shift_shared_across_alleles` states that no committed corpus holds a row of the class and what its index row counts; a test holds the sentences. (#124)
+  - The statistics counts page and the `stats_variant_classes_minimal` index row say a record resolved from a variant identifier keeps its stored class under `--minimal` in both engines; a test holds both. (#124)
+  - The DosageSensitivity section of `docs/plugins/flat-file.md` counts the nine regulatory and motif rows both engines write on its worked run; a test holds both sentences to the corpus. (#124)
+  - The page of `hgvs_shift_sequence_edge_window` says what the counts of its first example count: the 27 forward-strand rows, the four ClinVar records and their 20 rows; a test holds the sentences. (#124)
+  - The page of `hgvs_shift_sequence_edge_window` names the row of its long deletion whose terms differ, the inputs holding records of the class and what a comparison reports under the shift flags. (#124)
+  - `vep-formats-compare` sets aside a field of nine plugins that vep-rs alone fills from a lower-case table row, as the class `tabix_allele_case_insensitive_match`. (#124)
+  - `make_plugin_fixture.py` names the dbNSFP and dbscSNV layouts alone; `plugin_score_fixtures.py` writes the CADD and SpliceAI files. (#124)
+  - `spliceai_multi_entry_cell` also reads a gene that several entries of one score record name (`docs/divergences/spliceai-several-entries-of-one-gene.md`), and both SpliceAI fixture corpora carry six such records. (#124)
+  - The index gains `dbscsnv_file_without_gene_column`, on `docs/divergences/dbscsnv-file-without-gene-column.md`: dbscSNV reads a file whose header lacks `Ensembl_gene`, a column Ensembl VEP's plugin requires and never reads. (#124)
+  - The index gains `maxentscan_matrix_line_not_a_number`, on `docs/divergences/maxentscan-matrix-line-not-a-number.md`: a matrix line Perl converts only under a warning is refused where Ensembl VEP's plugin scores from it. (#124)
+  - The page of `json_non_finite_number_token`, `docs/divergences/json-non-finite-number-token.md`, names a score MaxEntScan prints as `Inf`, `-Inf` or `NaN`, a bare token in Ensembl VEP's JSON output. (#124)
+  - `scripts/fixtures/plugin_score_fixtures.py --entry-order` writes a SpliceAI score record whose entries name one symbol several times, with equal or with other scores. (#124)
+  - `scripts/fixtures/maxentscan_fixture_matrices.py --whole-numbers` writes whole-number matrices, with each 23-mer of `--boundary-kmers` at a rounding boundary that exact and double products print differently. (#124)
+  - `hgvsp_stop_codon_protein_comparison` gains a tenth shape, Ensembl VEP's empty `HGVSp` against the stop unchanged, in section 10 of `docs/divergences/hgvsp-stop-codon-protein-comparison.md` and in the entry's reproduction. (#124)
+  - `stop_codon_overlap_insertion_range` reads an in-frame insertion holding an unknown base beside `splice_region_variant`, section 2 of `docs/divergences/stop-codon-overlap-insertion-range.md`. (#124)
+  - `hgvs_shifted_indel_written_span_gate` reads the `REFSEQ_OFFSET` vep-rs alone writes beside its notation on an edited model, section 4 of `docs/divergences/hgvs-shifted-indel-written-span-gate.md`. (#124)
+  - `hgvs_clipped_reference_against_whole_alternate` reads Ensembl VEP's slid coordinate and respelled reference allele on an edited model, section 8 of `docs/divergences/hgvs-clipped-reference-against-whole-alternate.md`. (#124)
+  - `hgvs_shifted_insertion_clamped_end` reads the clamped notations Ensembl VEP respells on a model that carries an edit, section 2 of `docs/divergences/hgvs-shifted-insertion-clamped-end.md`. (#124)
+  - `docs/divergences/refseq-edited-model-hgvsc.md` section 3 describes a deletion over an edited model's first base that runs across an edit, a pair the format comparator leaves a difference. (#124)
+  - The index row and the page of `json_non_finite_number_token` name a value, a table's cell or a score a plugin prints, where they named a cell alone. (#124)
+  - `utrannotator_frameshift_at_stop_boundary` also covers an upstream ORF that keeps its length, which Ensembl VEP lists as shifted (`docs/divergences/utrannotator-frameshift-at-stop-boundary.md`). (#124)
+  - `utrannotator_lost_stop_written_before_stop_codon` also covers an insertion written at a stop codon's first base and one that leaves the stop codon whole in frame (`docs/divergences/utrannotator-lost-stop-written-before-stop-codon.md`). (#124)
+  - `utrannotator_gained_start_window` also covers a gained start named before the record's own insertion point (`docs/divergences/utrannotator-gained-start-window-comparison.md`). (#124)
+  - `utrannotator_structural_allele_text` also covers an annotated inversion and the loss alternate of several (`docs/output/structural-variants.md`). (#124)
+  - The documented difference `dbnsfp_mitochondrial_record_named_m` is added, with its page `docs/divergences/dbnsfp-mitochondrial-record-named-m.md`, reproduction and comparison class. (#124)
+  - `plugin_contig_mitochondrial_spelling` takes a tabix-backed plugin's field the candidate alone fills on a mitochondrial record on GRCh37 as on GRCh38; its page describes the check. (#124)
+  - The entry `loftee_gerp_walk_without_conservation_database` reads tier 2 in `docs/intended-divergences.md`, and its page names the corpus that carries its rows and the comparisons that apply the class. (#124)
+  - The comparison tools set aside `splice_term_past_the_record_span` for an allele that opens with a one-base reference allele, and read the class on rows printed under `--terms display`. (#124)
+  - The corpora `GRCh37-output-flags` and `GRCh37-plugin-spliceai-fixture` document one record each under `splice_term_past_the_record_span`. (#124)
+  - The stop codon class of the format comparator and corpus tool reads Ensembl VEP's residues and stop inserted before an earlier residue against vep-rs's stop unchanged, beside the candidate's cache. (#124)
+  - The comparison class `hgvs_insertion_left_where_the_shift_stops` takes the `HGVSp` of a row it reads, in `vep-formats-compare`, and the intended divergence's page covers it. (#124)
+  - A `vep-formats-compare field-class` question of `hgvs_shift_sequence_edge_window` has 24 columns, nine cells a row, and `vep-golden-corpus classify` asks it so. (#124)
+  - `vep-formats-compare` reads under `hgvsp_shifted_indel_written_span_gate` a stop written as unchanged or extended, also on a `cds_start_NF` transcript, and a shift longer than its coordinate, counted from `--json-cache`. (#124)
+  - The Other species page tables every species with a golden corpus and gives a worked example for each set of ready-made caches. (#124)
+  - Its new examples are an Ensembl Protists species, a genome of a bacterial and of a fungal collection and a human pangenome assembly. (#124)
+  - The README states which genomes are compared with Ensembl VEP: human on whole genomes, other species with a golden corpus, every other ready-made cache on a small generated input. (#124)
+  - The variation data section of the Cache setup page stands on a page of its own, Variation data in a native cache. (#124)
+  - The Cache setup page gives the form of another genome wherever a step differs by genome. (#124)
+  - The corpus tool's messages and the value labels of its help say `dataset`. (#124)
+  - The reproduction of `refseq_edited_model_shifted_insertion_bases` runs under `--refseq --hgvs` beside its `--shift_3prime 1` run, and the page's table names the 5' UTR record on `NM_001395858.1`. (#124)
+  - The reproduction of `refseq_edited_model_seam_insertion_hgvsc` runs records of all three forms of the entry, and its page gives both engines' `HGVSc` for the two records added. (#124)
+  - The `<CNV:TR>` page says both engines repeat a repeat unit that is not DNA across the run with a FASTA and keep it symbolic without one; a test holds it. (#124)
+  - The `<CNV:TR>` pages say what a multi-allelic record gives with and without a FASTA and that the comparison pairs its readings only where vep-rs's is symbolic; tests hold it. (#124)
+  - The `<CNV:TR>` page and the divergence-class taxonomy say which engine and which run write each stop term of a tandem repeat that ends past its transcript; a test holds them. (#124)
+  - The Arabidopsis thaliana section of the Other species page gives the `vep-cache-builder --auto` command beside the cache conversion and quotes the warning its installation prints. (#124)
+  - The Other species page says that a record past position 536,870,912 is annotated like any other and that known-variant and `--custom` files are read through a `.csi` index. (#124)
+  - The page and the reproduction of `loftee_gerp_walk_without_conservation_database` name the made-up GERP table they build `GERP_scores.synthetic.txt.gz`, and a test holds both to that name. (#124)
+  - The LoFTEE page's section on the ancestral-allele filter cites the routine at its lines on both branches of Ensembl VEP's LoF plugin, `grch38` and the `master` branch run on GRCh37. (#124)
+  - The Defect A page names its rule `covered_splice_region_swap` wherever it speaks of it, and states a differing region of an allele of another length by the page's own definition. (#124)
+  - The `HGVSc` position Ensembl VEP writes past the own edit of a failed-edit RefSeq model is a documented intended divergence, `refseq_failed_edit_model_hgvsc_offset`, with a class in `vep-formats-compare`. (#124)
+  - The cache pages say which file an installation reads each cell from and where an installed cache differs from Ensembl VEP's own. (#124)
+  - `vep-formats-compare` and `vep-golden-corpus classify` read under `cnv_tr_symbolic_loss_named_a_gain` a `tandem_repeat` row that names no direction term where the reference names `feature_elongation`, with the IMPACT its terms give. (#124)
+  - `vep-sv-compare` takes such a `tandem_repeat` row as the dropped allele's behind a leading allele of no repeat sequence. (#124)
+  - The embedding page states the library surface as what the API documentation of `vep-cli` shows, lists the items the crate root re-exports and points to the versioning page. (#124)
+  - The CLI reference states that a unique prefix is resolved against the flags of the release that reads it, and that `--help` leaves out the flags marked `(hidden)`. (#124)
+  - `vep-formats-compare` derives, on a stop codon polyadenylation completes, a deletion from the second tail base past the transcript's last base, such a deletion at the record's own place where no reference sequence is given, and a change at protein position 1 where no start codon is shown; `check_genome.sh` names the converted cache to the comparator for every transcript set. (#124)
+  - `utrannotator_lost_stop_written_before_stop_codon` also covers a lost stop of an ORF whose Kozak context and strength a shifted ORF of the list shares, told apart by the reading frame. (#124)
 
 - Library crates
-  - The error types of `vep-core` and `vep-io` (`IoError`, `ManifestError`, `PublishError` and five more) are `#[non_exhaustive]`: a breaking change of the libraries; a `match` on one takes a wildcard arm.
-  - `Consequence`, `VariantClass`, `Assembly`, `InputFormat` and 19 more enums of `vep-core`, `vep-io` and `vep-fasta` are `#[non_exhaustive]`: a breaking change of the libraries; a `match` on one takes a wildcard arm.
-  - `InputVariant`, `Transcript`, `TranscriptConsequence`, `FieldOptions` and 27 more structs are `#[non_exhaustive]`: a breaking change of the libraries; a caller starts from `Default` or a constructor and assigns fields.
-  - `ExonCoordMapper::pair_count` and `by_genomic_start` and `VcfOutputFormatter::info_field_name` and `fields` are private: a breaking change of the libraries; a caller calls the method of the same name.
-  - `vep_io::output::vcf_output::VcfFieldOptions`, a second name for `FieldOptions`, is removed: a breaking change of the libraries; a caller writes `FieldOptions`.
-  - No Arrow type stands in a public signature of `vep_io::output::parquet`: a breaking change of the libraries; `ParquetDirectoryWriter::create` takes the `ParquetOutputFormatter` in place of its schema.
-  - `Translation::start_exon_index` and `Translation::end_exon_index`, which nothing read, are removed: a breaking change of the libraries; a caller that builds a `Translation` leaves them out.
-  - `VEP_API_MODULE_VERSIONS`, `Consequence::ALL`, `RowKind::ALL` and `TRANSCRIPT_CONSEQUENCE_KEYS` are slices in place of arrays: a breaking change of the libraries; a caller that named an array type writes a slice type.
-  - `TabProjection`, `TAB_COLUMN_PREFIX`, `UNCHECKED_ORDER_WARNING` and `UNCHECKED_PARTITIONED_ORDER_WARNING` of `vep_io::output::parquet` are private: a breaking change of the libraries; `stored_column_names` and `tab_column_name` name a part's tab columns.
-  - `vep_core::allele_trim`, `vep_core::cache_info::left_out`, `REGULATORY_SCHEMA`, `FIXED_VARIATION_COLUMNS` and `unchecked_order_warning` are hidden from the API documentation; they serve the workspace's own crates.
-  - `EffectsConfig`, `HgvsOptions`, `HgvsgOptions`, `SpdiOptions`, `RunContext`, `CustomRunOptions`, `TabixConfig`, `CustomSpec` and six records of `vep-effects` and `vep-builtins` are `#[non_exhaustive]`: a breaking change of the libraries.
-  - `regulatory::Motif`, `regulatory::Allele`, `TabixRecord`, `ContentIdentity`, `StorePaths` and `PluginTimings` are the six records; a caller of a marked type starts from `Default` and assigns fields, or calls the record's `new`.
-  - `PluginError` of `vep-plugin` and `PluginError` and `CustomError` of `vep-builtins` are `#[non_exhaustive]`: a breaking change of the libraries; a `match` takes a wildcard arm and a struct pattern takes `..`.
-  - `LofteeContextRows`, `TranscriptPosition`, `CustomFormat`, `OutputFormat` and 14 more enums and returned structs of `vep-effects` and `vep-builtins` are `#[non_exhaustive]` in the same way: a breaking change of the libraries.
-  - No type of `noodles` or `bigtools` stands in a public signature of `vep-builtins`: a breaking change of the libraries; a caller reads the file with those libraries' own readers.
-  - `bigwig::open_bigwig`, `tabix::load_index`, `read_tabix_index`, `read_csi_index` and `tabix::Index` of `vep-builtins` are private: a breaking change of the libraries.
-  - The functions, methods and types of `vep-effects` that its README does not list are private: a breaking change of the libraries.
-  - In `vep-builtins` the plugin implementations (`vep_builtins::plugins`), `tabix::allele_match`, the `--custom` source types and the helpers that only the crate calls are private: a breaking change of the libraries.
-  - The items that only the workspace's own crates call (`BuiltinRegistry`, `RunContext`, `OutputFormat` and `CustomSources` among them) are hidden from the API documentation; a caller keeps to the items it shows.
-  - `vep_builtins::BuiltinPlugin` cannot be implemented outside the crate: a breaking change of the libraries; a plugin from outside the workspace is a shared library built against `vep-plugin`.
-  - `Config`, `PredictionConfig`, `AnnotationStats`, `FilterConfig`, `RowFilters`, `TranscriptSet`, `ColocationRules`, `config::RegulatoryGff` and `config::PluginDirs` of `vep-cli` are `#[non_exhaustive]`: a breaking change of the libraries; a caller starts from `Default` and assigns fields.
-  - `AnnotationResources` and `vcf_parser::VcfParse` of `vep-cli` are `#[non_exhaustive]`: a breaking change of the libraries; a caller calls `AnnotationResources::new` or `VcfParse::default_run` and assigns fields.
-  - `AnnotationError`, `PickCriterion`, `SourceType`, `NearestType`, `config::ParseFailure`, `Fork`, `DecompressionThreads`, `ReaderCore`, `PipelineMode`, `WriterStrategy`, `PrewarmAhead` and `runner::Teardown` of `vep-cli` are `#[non_exhaustive]`: a breaking change of the libraries; a `match` takes a wildcard arm.
-  - The error struct `config::CliError` of `vep-cli` is `#[non_exhaustive]`: a breaking change of the libraries; a pattern of the struct takes `..`.
-  - `config::ParseFailure::Usage` of `vep-cli` holds `config::UsageError` in place of the argument parser's error: a breaking change of the libraries; a caller calls its `exit`, `exit_code` or `is_help_or_version`, or formats it.
-  - The documented interface of `vep-cli` is its crate root and the modules `annotator`, `argv`, `config`, `pick`, `row_filter`, `runner`, `transcript_index` and `vcf_parser`.
-  - Fifteen modules of `vep-cli` and the items that only the workspace's own programs call (`Config::from_parsed`, `config::ParsedArgs`, `config::parse_command_line` and `Annotator::resources` among them) are hidden from the API documentation.
-  - A caller of `vep-cli` keeps to the items its API documentation shows and obtains the settings from `Config::from_argv` or `Config::default()`.
-  - The modules `dylib_plugins`, `filter_input`, `filter_set`, `frequency_filter`, `individuals`, `output_compress`, `recode`, `sv_source`, `transcript_lookup` and `variation_name_index` of `vep-cli` are private, the `vep` binary's own: a breaking change of the libraries; nothing replaces them.
-  - The items of the documented modules of `vep-cli` that nothing outside the library calls are private: a breaking change of the libraries.
-  - A caller of `vep-cli` writes the method of `Annotator` without its `_with_parallelism` suffix, `load_transcript_indexes` for `load_transcript_indexes_with_exon_ids` and `parse_vcf_line_with` for `parse_vcf_line_with_max_sv_size`.
-  - A caller of `vep-cli` writes `FilterConfig::default().pick_order` for `PickCriterion::DEFAULT_ORDER` and `pick::pick_order`, the type's `Default` for `TranscriptSet::from_config` and `ColocationRules::from_config`, `resolve_fork` for `Fork::resolve` and `vep_cli::apply_to_record` for `row_filter::apply_to_record`.
-  - Seven public fields of `vep-cli` are hidden from the API documentation and stay public fields (`AnnotationResources::builtin_plugins`, `custom_sources`, `regulatory_source`, `cell_types`, `sv_source`, `transcript_filter` and `VcfParse::reading`); `AnnotationResources::new` and `VcfParse::default_run` fill them.
+  - The error types of `vep-core` and `vep-io` (`IoError`, `ManifestError`, `PublishError` and five more) are `#[non_exhaustive]`: a breaking change of the libraries; a `match` on one takes a wildcard arm. (#124)
+  - `Consequence`, `VariantClass`, `Assembly`, `InputFormat` and 19 more enums of `vep-core`, `vep-io` and `vep-fasta` are `#[non_exhaustive]`: a breaking change of the libraries; a `match` on one takes a wildcard arm. (#124)
+  - `InputVariant`, `Transcript`, `TranscriptConsequence`, `FieldOptions` and 27 more structs are `#[non_exhaustive]`: a breaking change of the libraries; a caller starts from `Default` or a constructor and assigns fields. (#124)
+  - `ExonCoordMapper::pair_count` and `by_genomic_start` and `VcfOutputFormatter::info_field_name` and `fields` are private: a breaking change of the libraries; a caller calls the method of the same name. (#124)
+  - `vep_io::output::vcf_output::VcfFieldOptions`, a second name for `FieldOptions`, is removed: a breaking change of the libraries; a caller writes `FieldOptions`. (#124)
+  - No Arrow type stands in a public signature of `vep_io::output::parquet`: a breaking change of the libraries; `ParquetDirectoryWriter::create` takes the `ParquetOutputFormatter` in place of its schema. (#124)
+  - `Translation::start_exon_index` and `Translation::end_exon_index`, which nothing read, are removed: a breaking change of the libraries; a caller that builds a `Translation` leaves them out. (#124)
+  - `VEP_API_MODULE_VERSIONS`, `Consequence::ALL`, `RowKind::ALL` and `TRANSCRIPT_CONSEQUENCE_KEYS` are slices in place of arrays: a breaking change of the libraries; a caller that named an array type writes a slice type. (#124)
+  - `TabProjection`, `TAB_COLUMN_PREFIX`, `UNCHECKED_ORDER_WARNING` and `UNCHECKED_PARTITIONED_ORDER_WARNING` of `vep_io::output::parquet` are private: a breaking change of the libraries; `stored_column_names` and `tab_column_name` name a part's tab columns. (#124)
+  - `vep_core::allele_trim`, `vep_core::cache_info::left_out`, `REGULATORY_SCHEMA`, `FIXED_VARIATION_COLUMNS` and `unchecked_order_warning` are hidden from the API documentation; they serve the workspace's own crates. (#124)
+  - `EffectsConfig`, `HgvsOptions`, `HgvsgOptions`, `SpdiOptions`, `RunContext`, `CustomRunOptions`, `TabixConfig`, `CustomSpec` and six records of `vep-effects` and `vep-builtins` are `#[non_exhaustive]`: a breaking change of the libraries. (#124)
+  - `regulatory::Motif`, `regulatory::Allele`, `TabixRecord`, `ContentIdentity`, `StorePaths` and `PluginTimings` are the six records; a caller of a marked type starts from `Default` and assigns fields, or calls the record's `new`. (#124)
+  - `PluginError` of `vep-plugin` and `PluginError` and `CustomError` of `vep-builtins` are `#[non_exhaustive]`: a breaking change of the libraries; a `match` takes a wildcard arm and a struct pattern takes `..`. (#124)
+  - `LofteeContextRows`, `TranscriptPosition`, `CustomFormat`, `OutputFormat` and 14 more enums and returned structs of `vep-effects` and `vep-builtins` are `#[non_exhaustive]` in the same way: a breaking change of the libraries. (#124)
+  - No type of `noodles` or `bigtools` stands in a public signature of `vep-builtins`: a breaking change of the libraries; a caller reads the file with those libraries' own readers. (#124)
+  - `bigwig::open_bigwig`, `tabix::load_index`, `read_tabix_index`, `read_csi_index` and `tabix::Index` of `vep-builtins` are private: a breaking change of the libraries. (#124)
+  - The functions, methods and types of `vep-effects` that its README does not list are private: a breaking change of the libraries. (#124)
+  - In `vep-builtins` the plugin implementations (`vep_builtins::plugins`), `tabix::allele_match`, the `--custom` source types and the helpers that only the crate calls are private: a breaking change of the libraries. (#124)
+  - The items that only the workspace's own crates call (`BuiltinRegistry`, `RunContext`, `OutputFormat` and `CustomSources` among them) are hidden from the API documentation; a caller keeps to the items it shows. (#124)
+  - `vep_builtins::BuiltinPlugin` cannot be implemented outside the crate: a breaking change of the libraries; a plugin from outside the workspace is a shared library built against `vep-plugin`. (#124)
+  - `Config`, `PredictionConfig`, `AnnotationStats`, `FilterConfig`, `RowFilters`, `TranscriptSet`, `ColocationRules`, `config::RegulatoryGff` and `config::PluginDirs` of `vep-cli` are `#[non_exhaustive]`: a breaking change of the libraries; a caller starts from `Default` and assigns fields. (#124)
+  - `AnnotationResources` and `vcf_parser::VcfParse` of `vep-cli` are `#[non_exhaustive]`: a breaking change of the libraries; a caller calls `AnnotationResources::new` or `VcfParse::default_run` and assigns fields. (#124)
+  - `AnnotationError`, `PickCriterion`, `SourceType`, `NearestType`, `config::ParseFailure`, `Fork`, `DecompressionThreads`, `ReaderCore`, `PipelineMode`, `WriterStrategy`, `PrewarmAhead` and `runner::Teardown` of `vep-cli` are `#[non_exhaustive]`: a breaking change of the libraries; a `match` takes a wildcard arm. (#124)
+  - The error struct `config::CliError` of `vep-cli` is `#[non_exhaustive]`: a breaking change of the libraries; a pattern of the struct takes `..`. (#124)
+  - `config::ParseFailure::Usage` of `vep-cli` holds `config::UsageError` in place of the argument parser's error: a breaking change of the libraries; a caller calls its `exit`, `exit_code` or `is_help_or_version`, or formats it. (#124)
+  - The documented interface of `vep-cli` is its crate root and the modules `annotator`, `argv`, `config`, `pick`, `row_filter`, `runner`, `transcript_index` and `vcf_parser`. (#124)
+  - Fifteen modules of `vep-cli` and the items that only the workspace's own programs call (`Config::from_parsed`, `config::ParsedArgs`, `config::parse_command_line` and `Annotator::resources` among them) are hidden from the API documentation. (#124)
+  - A caller of `vep-cli` keeps to the items its API documentation shows and obtains the settings from `Config::from_argv` or `Config::default()`. (#124)
+  - The modules `dylib_plugins`, `filter_input`, `filter_set`, `frequency_filter`, `individuals`, `output_compress`, `recode`, `sv_source`, `transcript_lookup` and `variation_name_index` of `vep-cli` are private, the `vep` binary's own: a breaking change of the libraries; nothing replaces them. (#124)
+  - The items of the documented modules of `vep-cli` that nothing outside the library calls are private: a breaking change of the libraries. (#124)
+  - A caller of `vep-cli` writes the method of `Annotator` without its `_with_parallelism` suffix, `load_transcript_indexes` for `load_transcript_indexes_with_exon_ids` and `parse_vcf_line_with` for `parse_vcf_line_with_max_sv_size`. (#124)
+  - A caller of `vep-cli` writes `FilterConfig::default().pick_order` for `PickCriterion::DEFAULT_ORDER` and `pick::pick_order`, the type's `Default` for `TranscriptSet::from_config` and `ColocationRules::from_config`, `resolve_fork` for `Fork::resolve` and `vep_cli::apply_to_record` for `row_filter::apply_to_record`. (#124)
+  - Seven public fields of `vep-cli` are hidden from the API documentation and stay public fields (`AnnotationResources::builtin_plugins`, `custom_sources`, `regulatory_source`, `cell_types`, `sv_source`, `transcript_filter` and `VcfParse::reading`); `AnnotationResources::new` and `VcfParse::default_run` fill them. (#124)
 
 - Caches, reference FASTA and the cache tools
-  - `vep-cache-builder --include-predictions` refuses a species other than `homo_sapiens`, or an assembly other than GRCh37 and GRCh38, by name before any download, naming the conversion route.
-  - A variation directory or site with neither per-chromosome files nor `<species>.vcf.gz` ends the build naming both; the four human-only genome-wide files raise no warning for another species.
-  - `vep-cache-builder` downloads its inputs into a work directory under the cache root with `--auto` and under `--output-dir` otherwise, and removes it when the cache is in place.
-  - `vep-storable-to-json` writes `sequence_regions.tsv` beside `info.json`, the length and circular flag of each sequence that has a transcript.
-  - `vep-cache-builder --auto` brings the known variants with 1000 Genomes frequencies, their PubMed identifiers, synonyms and failed variants, wherever the release publishes a file or table of them.
-  - It also brings the SIFT and PolyPhen matrices and the regulatory and motif features, with cell-type activity and the matrix counts behind `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE`, wherever the release publishes them.
-  - `vep-cache-builder --auto` brings, for a species whose variation VCF is one file, the known variants of a sequence that file holds no record on, from the release's `variation_feature` table.
-  - `vep-cache-builder --auto` ends on one line for each part or cell left out, with the reason; a human installation downloads about 32 GB on GRCh38 and 16 GB on GRCh37.
-  - `vep-cache-builder --auto` ends on one more warning, which names the sequences of the installed cache that hold no known variant, the first ten by name.
-  - The warning of a cache without variation data names the flags that ask for known variants, what a frequency filter then does and the caches that hold the data.
+  - `vep-cache-builder --include-predictions` refuses a species other than `homo_sapiens`, or an assembly other than GRCh37 and GRCh38, by name before any download, naming the conversion route. (#124)
+  - A variation directory or site with neither per-chromosome files nor `<species>.vcf.gz` ends the build naming both; the four human-only genome-wide files raise no warning for another species. (#124)
+  - `vep-cache-builder` downloads its inputs into a work directory under the cache root with `--auto` and under `--output-dir` otherwise, and removes it when the cache is in place. (#124)
+  - `vep-storable-to-json` writes `sequence_regions.tsv` beside `info.json`, the length and circular flag of each sequence that has a transcript. (#124)
+  - `vep-cache-builder --auto` brings the known variants with 1000 Genomes frequencies, their PubMed identifiers, synonyms and failed variants, wherever the release publishes a file or table of them. (#124)
+  - It also brings the SIFT and PolyPhen matrices and the regulatory and motif features, with cell-type activity and the matrix counts behind `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE`, wherever the release publishes them. (#124)
+  - `vep-cache-builder --auto` brings, for a species whose variation VCF is one file, the known variants of a sequence that file holds no record on, from the release's `variation_feature` table. (#124)
+  - `vep-cache-builder --auto` ends on one line for each part or cell left out, with the reason; a human installation downloads about 32 GB on GRCh38 and 16 GB on GRCh37. (#124)
+  - `vep-cache-builder --auto` ends on one more warning, which names the sequences of the installed cache that hold no known variant, the first ten by name. (#124)
+  - The warning of a cache without variation data names the flags that ask for known variants, what a frequency filter then does and the caches that hold the data. (#124)
 
 - Command line, configuration and errors
-  - A converted cache that declares no regulatory schema is refused with a message that names the missing schema.
-  - An unported plugin's refusal gives MPC the reason `A GRCh37-only missense deleteriousness metric.`
-  - The help of the hidden `--compression_threads`, `--parse_threads`, `--prewarm_ahead`, `--reader_core` and `--writer_strategy` says that a value changes nothing in the output but the command line it records.
-  - `--regulatory_gff` errors name the key and its file once, as `<key>=<file>`, and an index that cannot be read is refused with the index reader's own text.
-  - `vep --help` and the CLI reference group the shift, co-located variant, dropped-row, allele, reference-allele, custom annotation and record-handling flags under headings of their own, as does `vep recode --help`.
-  - A built-in plugin's warning under an assembly that gives it no hint names where the assembly was read, the `--assembly` flag or the cache; it named the flag either way.
-  - An unported plugin's refusal gives EVE the reason `Missense-only evolutionary scores, popEVE included since release 116; AlphaMissense covers missense pathogenicity.`
-  - The CLI reference states that a hidden flag may change or be removed in any release, and that an abbreviation can stop resolving when a release adds an option.
-  - A possessive quantifier in a filter pattern (`s++`) is refused by `vep --transcript_filter`, `vep filter` and `vep recode` with exit 1, where it ran as the greedy quantifier.
-  - `-V` beside any other argument is refused with exit 1 and a line naming `-v` and `--version`, where it printed the version and annotated nothing; `-V` alone prints the version.
-  - `vep_core::allele_trim` owns the allele trimming of the variant matcher; `vep_builtins::tabix` loses `detect_assembly_marker` and `allele_match::matches_allele`.
+  - A converted cache that declares no regulatory schema is refused with a message that names the missing schema. (#124)
+  - An unported plugin's refusal gives MPC the reason `A GRCh37-only missense deleteriousness metric.` (#124)
+  - The help of the hidden `--compression_threads`, `--parse_threads`, `--prewarm_ahead`, `--reader_core` and `--writer_strategy` says that a value changes nothing in the output but the command line it records. (#124)
+  - `--regulatory_gff` errors name the key and its file once, as `<key>=<file>`, and an index that cannot be read is refused with the index reader's own text. (#124)
+  - `vep --help` and the CLI reference group the shift, co-located variant, dropped-row, allele, reference-allele, custom annotation and record-handling flags under headings of their own, as does `vep recode --help`. (#124)
+  - A built-in plugin's warning under an assembly that gives it no hint names where the assembly was read, the `--assembly` flag or the cache; it named the flag either way. (#124)
+  - An unported plugin's refusal gives EVE the reason `Missense-only evolutionary scores, popEVE included since release 116; AlphaMissense covers missense pathogenicity.` (#124)
+  - The CLI reference states that a hidden flag may change or be removed in any release, and that an abbreviation can stop resolving when a release adds an option. (#124)
+  - A possessive quantifier in a filter pattern (`s++`) is refused by `vep --transcript_filter`, `vep filter` and `vep recode` with exit 1, where it ran as the greedy quantifier. (#124)
+  - `-V` beside any other argument is refused with exit 1 and a line naming `-v` and `--version`, where it printed the version and annotated nothing; `-V` alone prints the version. (#124)
+  - `vep_core::allele_trim` owns the allele trimming of the variant matcher; `vep_builtins::tabix` loses `detect_assembly_marker` and `allele_match::matches_allele`. (#124)
 
 - Output formats, columns and headers
-  - VCF output keeps an input `INFO` column of exactly `0` before the new field, where Ensembl VEP joins or drops it (`vcf_info_column_of_zero`, `docs/divergences/vcf-info-column-of-zero.md`).
-  - The `minimal_check_frequency_no_row_split_record` entry states that the report counts its record once among `Variants processed`, where Ensembl VEP counts each feature (`docs/output/known-variants.md#filtering-by-frequency`).
-  - The `gxf_malformed_coordinate_line_refused` entry gains the regulatory GFF lines a leading tab or a NUL byte makes unplaceable (`docs/divergences/gxf-malformed-coordinate-line-refused.md`).
-  - vep-rs prints the version token of Ensembl VEP 116.3 in every header and report; the concordance scripts and the divergence check default to that release and its image.
-  - The HTML statistics report carries each chart's counts under its heading, as the statement Ensembl VEP's report writes for the chart, so a program that collects reports reads them.
-  - `vep_io::output::parquet::canonical_tab_text` keeps a text that is no INT32 as written, where it gave `-`, the text of NULL.
-  - The `##VEP=` line of a VCF output carries Ensembl VEP's API module keys, `ensembl=` to `ensembl-variation=`, with the Ensembl VEP 116.3 image's values; the `##vep-rs=` line names the engine.
+  - VCF output keeps an input `INFO` column of exactly `0` before the new field, where Ensembl VEP joins or drops it (`vcf_info_column_of_zero`, `docs/divergences/vcf-info-column-of-zero.md`). (#124)
+  - The `minimal_check_frequency_no_row_split_record` entry states that the report counts its record once among `Variants processed`, where Ensembl VEP counts each feature (`docs/output/known-variants.md#filtering-by-frequency`). (#124)
+  - The `gxf_malformed_coordinate_line_refused` entry gains the regulatory GFF lines a leading tab or a NUL byte makes unplaceable (`docs/divergences/gxf-malformed-coordinate-line-refused.md`). (#124)
+  - vep-rs prints the version token of Ensembl VEP 116.3 in every header and report; the concordance scripts and the divergence check default to that release and its image. (#124)
+  - The HTML statistics report carries each chart's counts under its heading, as the statement Ensembl VEP's report writes for the chart, so a program that collects reports reads them. (#124)
+  - `vep_io::output::parquet::canonical_tab_text` keeps a text that is no INT32 as written, where it gave `-`, the text of NULL. (#124)
+  - The `##VEP=` line of a VCF output carries Ensembl VEP's API module keys, `ensembl=` to `ensembl-variation=`, with the Ensembl VEP 116.3 image's values; the `##vep-rs=` line names the engine. (#124)
 
 - Plugins
-  - A `.vpd` store of any index version but 5, a 0.6.0 store among them, is refused and its table is read where `<table>.tbi` is beside it; `convert-plugin-data` rebuilds it.
-  - `LoFTEE`'s refusal of a GERP tabix file that does not open says what vep-rs expects: a bgzip-compressed table with its tabix index beside it.
-  - LoFTEE refuses `gerp_file:mysql` and `conservation_file:mysql` under a line that names the database connection.
-  - CADD, OpenTargets and GWAS match a table row whose alleles are written in lower case; `tabix_allele_case_insensitive_match` in `docs/plugins.md` names them, with AlphaMissense and REVEL.
-  - UTRAnnotator is refused at load in a run without a reference sequence, a warning or the plugin's error under `--safe`; `utrannotator_without_reference` on the Transcript-model plugins page documents Ensembl VEP's behaviour.
-  - On GRCh37 a plugin's table is read across the mitochondrial names (`MT` or `chrMT`, `M` or `chrM`) only where its rows state the assembly's bases, checked against `--fasta`.
-  - LoFTEE's `NAGNAG_SITE` flag on an acceptor base that transcripts on both strands share is documented as `loftee_nagnag_site_first_transcript_strand`, on a page of its own.
-  - For that flag, Ensembl VEP's plugin keeps the reading of the first transcript whose acceptor row it tests for the whole record, and vep-rs reads each row's own strand.
+  - A `.vpd` store of any index version but 5, a 0.6.0 store among them, is refused and its table is read where `<table>.tbi` is beside it; `convert-plugin-data` rebuilds it. (#124)
+  - `LoFTEE`'s refusal of a GERP tabix file that does not open says what vep-rs expects: a bgzip-compressed table with its tabix index beside it. (#124)
+  - LoFTEE refuses `gerp_file:mysql` and `conservation_file:mysql` under a line that names the database connection. (#124)
+  - CADD, OpenTargets and GWAS match a table row whose alleles are written in lower case; `tabix_allele_case_insensitive_match` in `docs/plugins.md` names them, with AlphaMissense and REVEL. (#124)
+  - UTRAnnotator is refused at load in a run without a reference sequence, a warning or the plugin's error under `--safe`; `utrannotator_without_reference` on the Transcript-model plugins page documents Ensembl VEP's behaviour. (#124)
+  - On GRCh37 a plugin's table is read across the mitochondrial names (`MT` or `chrMT`, `M` or `chrM`) only where its rows state the assembly's bases, checked against `--fasta`. (#124)
+  - LoFTEE's `NAGNAG_SITE` flag on an acceptor base that transcripts on both strands share is documented as `loftee_nagnag_site_first_transcript_strand`, on a page of its own. (#124)
+  - For that flag, Ensembl VEP's plugin keeps the reading of the first transcript whose acceptor row it tests for the whole record, and vep-rs reads each row's own strand. (#124)
 
 - HGVS, SPDI and identifiers
-  - The `refseq_edited_model_hgvsc_offset` entry gains an Ensembl model whose `_rna_edit` deletes a base and prints no `BAM_EDIT`; its page says how a corpus manifest sets such a row aside (`docs/divergences/refseq-edited-model-hgvsc.md`).
-  - The `contig_absent_from_fasta` entry gains `--hgvsg`: Ensembl VEP prints an HGVSg whose reference base is `N`, vep-rs none (`docs/cache-setup.md`).
+  - The `refseq_edited_model_hgvsc_offset` entry gains an Ensembl model whose `_rna_edit` deletes a base and prints no `BAM_EDIT`; its page says how a corpus manifest sets such a row aside (`docs/divergences/refseq-edited-model-hgvsc.md`). (#124)
+  - The `contig_absent_from_fasta` entry gains `--hgvsg`: Ensembl VEP prints an HGVSg whose reference base is `N`, vep-rs none (`docs/cache-setup.md`). (#124)
 
 - Transcript attributes, predictions and consequences
-  - An allele that opens with its one-base reference allele, in a record of several alternate alleles, takes the splice and intron terms of the insertion it writes (`splice_term_past_the_record_span`).
+  - An allele that opens with its one-base reference allele, in a record of several alternate alleles, takes the splice and intron terms of the insertion it writes (`splice_term_past_the_record_span`). (#124)
 
 ### Removed
 
 - Documentation, test corpora and comparison tools
-  - `docs/assets/benchmark.svg`, the wall-time chart no page shows, is removed with `scripts/docs/render_benchmark_chart.py`, the post-build chart check and the `--source` option of `site_postbuild.py`.
-  - The documented divergences Ensembl VEP 116.3 corrects leave the index with their pages and reproductions: `custom_shifted_allele_records`, `frequency_filter_allele_key_order`, `frequency_filter_zero_value` and `file_cache_reads_ncrna_gene_lines`.
+  - `docs/assets/benchmark.svg`, the wall-time chart no page shows, is removed with `scripts/docs/render_benchmark_chart.py`, the post-build chart check and the `--source` option of `site_postbuild.py`. (#124)
+  - The documented divergences Ensembl VEP 116.3 corrects leave the index with their pages and reproductions: `custom_shifted_allele_records`, `frequency_filter_allele_key_order`, `frequency_filter_zero_value` and `file_cache_reads_ncrna_gene_lines`. (#124)
 
 - Library crates
-  - The trait `vep_plugin::VepPlugin`, which nothing implemented or ran, is removed: a breaking change of the libraries; a plugin exports the C ABI of `vep_plugin::abi` from a shared library.
-  - The cargo features `abi-one`, `no-feature-types` and `missing-free` of `vep-plugin`, which gated no library item, are removed: a breaking change of the libraries; a caller drops them from its `features` list.
+  - The trait `vep_plugin::VepPlugin`, which nothing implemented or ran, is removed: a breaking change of the libraries; a plugin exports the C ABI of `vep_plugin::abi` from a shared library. (#124)
+  - The cargo features `abi-one`, `no-feature-types` and `missing-free` of `vep-plugin`, which gated no library item, are removed: a breaking change of the libraries; a caller drops them from its `features` list. (#124)
 
 - Caches, reference FASTA and the cache tools
-  - `vep-cache-converter --region-size`, accepted and ignored by the cache mode, is removed: a breaking change of the command line, which refuses the flag as an unknown argument (exit 2).
+  - `vep-cache-converter --region-size`, accepted and ignored by the cache mode, is removed: a breaking change of the command line, which refuses the flag as an unknown argument (exit 2). (#124)
 
 ### Fixed
 
 - Caches, reference FASTA and the cache tools
   - `--fasta` given a FASTA without its `.fai`, or a `bgzip` FASTA without its `.gzi`, writes each beside it as `samtools faidx` writes it, as Ensembl VEP does. (#119)
-  - `convert-plugin-data` writes an output named near the file-name limit and refuses one whose `.vpdi` name passes it; the scratch name did not fit.
-  - `vep-cache-builder` writes `CHECKSUMS.sha256` first as a line that lists no file and last as the list, so `vep` refuses by name a directory a build left early.
-  - `vep-cache-builder` skips a GFF3 or GTF line whose columns end at NUL bytes, which `tabix` places and Ensembl VEP reads past, and builds the rest of the file.
-  - `vep-cache-builder` refuses a GFF3, GTF or regulatory GFF line whose sequence name, source or type holds a NUL byte, naming the column `tabix` reads as its start.
-  - `vep-cache-builder --regulatory-gff` skips a line whose sequence name ends at a NUL byte where `tabix` places the line, as Ensembl VEP and `vep --regulatory_gff` skip it.
-  - `vep-cache-builder` refuses a CDS line whose phase column Ensembl VEP ends its run on, naming the file, the line and the text.
-  - `vep-cache-builder` refuses a GFF3 transcript whose exon ranks run against position, naming the exons and their ranks, where Ensembl VEP reads an exon's bases as an intron's.
-  - `vep-cache-builder --include-variations` builds a species other than `homo_sapiens` from the one genome-wide `<species>.vcf.gz` Ensembl publishes for it, per-chromosome files being human's alone; `--auto` fetches it too.
-  - `convert-plugin-data` writes each row to the store as it reads it and holds no table in memory, the store's bytes unchanged; a table larger than memory could not be converted.
-  - `vep-cache-converter` writes `CHECKSUMS.sha256` first as a line that lists no file and last as the list, so `vep` refuses by name a directory a conversion left early.
-  - `vep-cache-builder --version` and `vep-cache-converter --version`, and `-V` on either, print the binary's name and version and exit 0; both ended on an unexpected-argument error.
-  - `vep-cache-converter` ends a failed run with one `ERROR: [cache-converter] <message>` line carrying the failure and its causes; it printed several lines under `Error:` and `Caused by:`.
-  - `convert-plugin-data` leaves an earlier store whole when it is refused at a row, fails or is killed before the new store is written; the earlier store was lost.
-  - `vep-cache-builder` and `vep-cache-converter` write plain log lines when standard error is a file or a pipe; colour codes go to a terminal alone, and not under `NO_COLOR`.
-  - `vep-storable-to-json` writes a transcript's biotype as its name where the Ensembl cache holds it as an object, so the region file loads.
-  - `vep-cache-builder` matches `--gtf` tags and `--fasta` records by identifier and version together: a version written twice names one line, and `T1` at version 1 and `T1.1` keep their own.
-  - `vep-cache-builder` takes a protein FASTA record that ends in a stop character as its transcript's peptide, the character neither counted nor stored, as Ensembl VEP's cache peptide carries none.
-  - `vep-cache-builder` refuses a reverse-strand transcript whose translation ends in an exon nested in the exon it starts in, naming the CDS line and both exons.
-  - `vep-cache-builder`'s warning counts one protein FASTA record set aside in the singular: `1 record was set aside for its length`.
-  - `vep-cache-builder` skips a regulatory GFF line of an unsupported type that holds a byte that is not UTF-8, as `--regulatory_gff` and Ensembl VEP skip it.
-  - `vep-cache-builder --include-variations` names a chromosome in its log line and its error as the cache spells it, `chromosome 2L`; the lines read `chr2L`.
-  - `convert-plugin-data` refuses an output that is any index of its table.
-  - `convert-plugin-data` creates its scratch files before it removes an earlier store's index and removes those a killed conversion left; an earlier store was lost to a refusal that touched nothing.
-  - `convert-plugin-data` refuses `--chr-col` and `--start-col` that name other columns than the table's tabix index was built on, naming the matching flags; the conversion failed verification after reading the whole table.
-  - `convert-plugin-data` follows an output's chain of symbolic links to its last name, writing and removing a failed store there; it replaced the second link and removed a failed store's links.
-  - `vep-cache-builder` builds a sequence whose own name begins with `chr` (`chromosome_1`) under that name; it built `omosome_1`.
-  - `vep-cache-builder` keeps a mitochondrion written `chrM` or `M` as written under a genome FASTA that names its own otherwise (`Mito`); it built `MT`, a name that FASTA lacks.
-  - `vep-cache-builder` stops builds stating no codon table for a region named `M` or holding `mito`, `chloro` or `plastid` (`OVOC_MITOCHONDRIAL`, `Chloro`); it translated such a region under the nuclear code silently.
-  - `vep-cache-builder --auto --site` reads a server's 403 for a file a tree may lack, an index page or `dna_index/` among them, as a 404; such a GRCh37 mirror was refused.
-  - `vep-cache-converter` writes a count of one in the singular in its log and its failed-verification error, `1 region` and `1 mismatch`; it wrote `1 regions` and `1 mismatches`.
-  - `vep-cache-builder` writes a count of one with its noun in the singular in its log lines, `1 transcript in 1 region`; the lines read `1 transcripts in 1 regions`.
-  - A cache whose transcripts name genetic code 26 (Pachysolen tannophilus nuclear) loads and is annotated under NCBI's table for it, `CTG` as alanine, where the loader refused it.
-  - A cache transcript with no `gene_stable_id`, as RefSeq and merged caches of other species hold, loads and is annotated with an empty `Gene`, where the reader refused its chromosome.
-  - `vep` reads a converted cache whose translation carries a database id and no stable id, as the RefSeq sets of several species do; it ended on a `missing field` error.
-  - `vep` reads a coding model whose cached coding end is negative or precedes its coding start, as a model without a coding sequence; the run ended on a cache error.
-  - A RefSeq or merged cache's transcript that shares its stable id with another is read through the region files a record reaches; a record got a row of both.
-  - `vep-cache-builder --auto` installs a genome whose published `.fai` or `.gzi` does not open its `dna_index/` file, writing both indexes with a warning; Arabidopsis thaliana of Ensembl Plants 63 was refused.
-  - On GRCh37 a `--fasta` sequence named `chrM` or `M` answers for `MT` by vep-rs's own spellings only when it has the assembly's 16,569 bases.
-  - On GRCh37 `--gff`, `--gtf` and the cache builder warn, and do not read a file's `chrM` or `M` as `MT`, over a FASTA whose mitochondrial record is not 16,569 bases.
-  - On GRCh37 a `--fasta` record named `chrM` or `M` of another length than the assembly's 16,569 bases is read for no record on `MT`.
-  - A transcript an Ensembl cache holds in fewer region files than its span crosses, as on a patch or alternate sequence, is read through the region files a record reaches.
-  - A record past the region files that hold such a transcript gets none of the transcript's rows, where it got them.
-  - Rows over a cache built from a GTF or GFF3 follow Ensembl VEP's transcript key order where one transcript identifier continues another, as `YML045W-A` continues `YML045W`: the longer comes first.
-  - `convert-plugin-data` holds `--end-col` and `--zero-based` to the table's tabix index, naming the matching flags; the index's own layout and single one-based positions pass.
-  - It refuses an `--end-col` given without `--ref-col`, and a `--zero-based` unless given with `--end-col` and `--ref-col` under an index of zero-based starts.
-  - `convert-plugin-data` warns where single one-based positions leave out what the table's tabix index declares; the conversion verified a store CADD refused.
-  - A `--fasta` that holds both `chrM` and `chrMT` gives a read for `MT` the same record whichever is listed first, on GRCh37 the one of 16,569 bases.
-  - `--gff`, `--gtf` and the cache builder test a GRCh37 mitochondrial region on its FASTA record: where no coding transcript reads, a run leaves it out and a build is refused.
-  - On GRCh37 input records written `chrM` or `M` are skipped with a warning where the `--fasta` record of that name is not 16,569 bases long; they were placed on `MT`.
-  - `vep-cache-builder` with the core dumps starts a one-exon transcript's coding sequence where the `translation` table does; four Arabidopsis thaliana mitochondrial transcripts of Ensembl Plants 63 opened at the exon's start.
-  - `vep-cache-builder --variation-dumps` writes one `allele:term` pair of `clin_sig_allele` for each classification of a ClinVar significance that holds several, where `CLIN_SIG` listed a term twice.
+  - `convert-plugin-data` writes an output named near the file-name limit and refuses one whose `.vpdi` name passes it; the scratch name did not fit. (#124)
+  - `vep-cache-builder` writes `CHECKSUMS.sha256` first as a line that lists no file and last as the list, so `vep` refuses by name a directory a build left early. (#124)
+  - `vep-cache-builder` skips a GFF3 or GTF line whose columns end at NUL bytes, which `tabix` places and Ensembl VEP reads past, and builds the rest of the file. (#124)
+  - `vep-cache-builder` refuses a GFF3, GTF or regulatory GFF line whose sequence name, source or type holds a NUL byte, naming the column `tabix` reads as its start. (#124)
+  - `vep-cache-builder --regulatory-gff` skips a line whose sequence name ends at a NUL byte where `tabix` places the line, as Ensembl VEP and `vep --regulatory_gff` skip it. (#124)
+  - `vep-cache-builder` refuses a CDS line whose phase column Ensembl VEP ends its run on, naming the file, the line and the text. (#124)
+  - `vep-cache-builder` refuses a GFF3 transcript whose exon ranks run against position, naming the exons and their ranks, where Ensembl VEP reads an exon's bases as an intron's. (#124)
+  - `vep-cache-builder --include-variations` builds a species other than `homo_sapiens` from the one genome-wide `<species>.vcf.gz` Ensembl publishes for it, per-chromosome files being human's alone; `--auto` fetches it too. (#124)
+  - `convert-plugin-data` writes each row to the store as it reads it and holds no table in memory, the store's bytes unchanged; a table larger than memory could not be converted. (#124)
+  - `vep-cache-converter` writes `CHECKSUMS.sha256` first as a line that lists no file and last as the list, so `vep` refuses by name a directory a conversion left early. (#124)
+  - `vep-cache-builder --version` and `vep-cache-converter --version`, and `-V` on either, print the binary's name and version and exit 0; both ended on an unexpected-argument error. (#124)
+  - `vep-cache-converter` ends a failed run with one `ERROR: [cache-converter] <message>` line carrying the failure and its causes; it printed several lines under `Error:` and `Caused by:`. (#124)
+  - `convert-plugin-data` leaves an earlier store whole when it is refused at a row, fails or is killed before the new store is written; the earlier store was lost. (#124)
+  - `vep-cache-builder` and `vep-cache-converter` write plain log lines when standard error is a file or a pipe; colour codes go to a terminal alone, and not under `NO_COLOR`. (#124)
+  - `vep-storable-to-json` writes a transcript's biotype as its name where the Ensembl cache holds it as an object, so the region file loads. (#124)
+  - `vep-cache-builder` matches `--gtf` tags and `--fasta` records by identifier and version together: a version written twice names one line, and `T1` at version 1 and `T1.1` keep their own. (#124)
+  - `vep-cache-builder` takes a protein FASTA record that ends in a stop character as its transcript's peptide, the character neither counted nor stored, as Ensembl VEP's cache peptide carries none. (#124)
+  - `vep-cache-builder` refuses a reverse-strand transcript whose translation ends in an exon nested in the exon it starts in, naming the CDS line and both exons. (#124)
+  - `vep-cache-builder`'s warning counts one protein FASTA record set aside in the singular: `1 record was set aside for its length`. (#124)
+  - `vep-cache-builder` skips a regulatory GFF line of an unsupported type that holds a byte that is not UTF-8, as `--regulatory_gff` and Ensembl VEP skip it. (#124)
+  - `vep-cache-builder --include-variations` names a chromosome in its log line and its error as the cache spells it, `chromosome 2L`; the lines read `chr2L`. (#124)
+  - `convert-plugin-data` refuses an output that is any index of its table. (#124)
+  - `convert-plugin-data` creates its scratch files before it removes an earlier store's index and removes those a killed conversion left; an earlier store was lost to a refusal that touched nothing. (#124)
+  - `convert-plugin-data` refuses `--chr-col` and `--start-col` that name other columns than the table's tabix index was built on, naming the matching flags; the conversion failed verification after reading the whole table. (#124)
+  - `convert-plugin-data` follows an output's chain of symbolic links to its last name, writing and removing a failed store there; it replaced the second link and removed a failed store's links. (#124)
+  - `vep-cache-builder` builds a sequence whose own name begins with `chr` (`chromosome_1`) under that name; it built `omosome_1`. (#124)
+  - `vep-cache-builder` keeps a mitochondrion written `chrM` or `M` as written under a genome FASTA that names its own otherwise (`Mito`); it built `MT`, a name that FASTA lacks. (#124)
+  - `vep-cache-builder` stops builds stating no codon table for a region named `M` or holding `mito`, `chloro` or `plastid` (`OVOC_MITOCHONDRIAL`, `Chloro`); it translated such a region under the nuclear code silently. (#124)
+  - `vep-cache-builder --auto --site` reads a server's 403 for a file a tree may lack, an index page or `dna_index/` among them, as a 404; such a GRCh37 mirror was refused. (#124)
+  - `vep-cache-converter` writes a count of one in the singular in its log and its failed-verification error, `1 region` and `1 mismatch`; it wrote `1 regions` and `1 mismatches`. (#124)
+  - `vep-cache-builder` writes a count of one with its noun in the singular in its log lines, `1 transcript in 1 region`; the lines read `1 transcripts in 1 regions`. (#124)
+  - A cache whose transcripts name genetic code 26 (Pachysolen tannophilus nuclear) loads and is annotated under NCBI's table for it, `CTG` as alanine, where the loader refused it. (#124)
+  - A cache transcript with no `gene_stable_id`, as RefSeq and merged caches of other species hold, loads and is annotated with an empty `Gene`, where the reader refused its chromosome. (#124)
+  - `vep` reads a converted cache whose translation carries a database id and no stable id, as the RefSeq sets of several species do; it ended on a `missing field` error. (#124)
+  - `vep` reads a coding model whose cached coding end is negative or precedes its coding start, as a model without a coding sequence; the run ended on a cache error. (#124)
+  - A RefSeq or merged cache's transcript that shares its stable id with another is read through the region files a record reaches; a record got a row of both. (#124)
+  - `vep-cache-builder --auto` installs a genome whose published `.fai` or `.gzi` does not open its `dna_index/` file, writing both indexes with a warning; Arabidopsis thaliana of Ensembl Plants 63 was refused. (#124)
+  - On GRCh37 a `--fasta` sequence named `chrM` or `M` answers for `MT` by vep-rs's own spellings only when it has the assembly's 16,569 bases. (#124)
+  - On GRCh37 `--gff`, `--gtf` and the cache builder warn, and do not read a file's `chrM` or `M` as `MT`, over a FASTA whose mitochondrial record is not 16,569 bases. (#124)
+  - On GRCh37 a `--fasta` record named `chrM` or `M` of another length than the assembly's 16,569 bases is read for no record on `MT`. (#124)
+  - A transcript an Ensembl cache holds in fewer region files than its span crosses, as on a patch or alternate sequence, is read through the region files a record reaches. (#124)
+  - A record past the region files that hold such a transcript gets none of the transcript's rows, where it got them. (#124)
+  - Rows over a cache built from a GTF or GFF3 follow Ensembl VEP's transcript key order where one transcript identifier continues another, as `YML045W-A` continues `YML045W`: the longer comes first. (#124)
+  - `convert-plugin-data` holds `--end-col` and `--zero-based` to the table's tabix index, naming the matching flags; the index's own layout and single one-based positions pass. (#124)
+  - It refuses an `--end-col` given without `--ref-col`, and a `--zero-based` unless given with `--end-col` and `--ref-col` under an index of zero-based starts. (#124)
+  - `convert-plugin-data` warns where single one-based positions leave out what the table's tabix index declares; the conversion verified a store CADD refused. (#124)
+  - A `--fasta` that holds both `chrM` and `chrMT` gives a read for `MT` the same record whichever is listed first, on GRCh37 the one of 16,569 bases. (#124)
+  - `--gff`, `--gtf` and the cache builder test a GRCh37 mitochondrial region on its FASTA record: where no coding transcript reads, a run leaves it out and a build is refused. (#124)
+  - On GRCh37 input records written `chrM` or `M` are skipped with a warning where the `--fasta` record of that name is not 16,569 bases long; they were placed on `MT`. (#124)
+  - `vep-cache-builder` with the core dumps starts a one-exon transcript's coding sequence where the `translation` table does; four Arabidopsis thaliana mitochondrial transcripts of Ensembl Plants 63 opened at the exon's start. (#124)
+  - `vep-cache-builder --variation-dumps` writes one `allele:term` pair of `clin_sig_allele` for each classification of a ClinVar significance that holds several, where `CLIN_SIG` listed a term twice. (#124)
 
 - Plugins
-  - A `.vpd` store whose index names one chromosome twice, or out of position order, is refused; the later entry was read.
-  - The warning of a refused `.vpd` store carries the refusal's own text; it opened with `plugin initialization failed:` though the plugin loaded from its data file.
-  - Under an output key two built-in plugins write (a TranscriptAnnotator `prefix=` naming another plugin's field), each row prints the value of the plugin loaded later, an undefined value included.
-  - PrimateAI writes an empty score cell with a filled cell after it as the empty string, an empty tab cell and `""` in JSON, as Ensembl VEP does.
-  - `--custom` with `type=exact` lists a VCF row whose `POS` is spelt with a sign, a fraction, an exponent or a leading zero exactly where Ensembl VEP lists it.
-  - `--custom` lists a row whose start is 0 or led by a minus sign among the rows written at base 1 in the file's order, as Ensembl VEP does.
-  - A `--custom` source's whole-number `distance` is compared with the difference between a record's end and the variant's exactly past 2^53, as Ensembl VEP compares it.
-  - Rows of a `--custom` file that follow a start cell at 2^63 - 1 or above are listed, as Ensembl VEP lists them; plugin tables read alike.
-  - `LoFTEE` keys of the other assembly (`gerp_end_trunc_cutoff` on GRCh37, `skip_lof_info` on GRCh38) are named in a status line, as Ensembl VEP writes no warning; the warnings file gained a line.
-  - A `.vpd` store whose index differs from its recorded SHA256 is refused; an index altered past its header was read.
-  - A plugin checks for its data file's `.tbi` before reading the header unless a complete `.vpd` store with a current index lies beside it; any `.vpd` file skipped the check.
-  - The plugin pages name the fifteen plugins that read a `.vpd` store and say LOEUF reads its data file through tabix alone; they had every tabix plugin reading a store.
-  - The LoFTEE page says that under `check_complete_cds:true` both engines filter the frameshift rows on a `cds_end_NF` transcript that carry an exon number, 7 of the golden corpus's 10.
-  - The LoFTEE page says the 3 such rows without an exon number stay at `LoF=HC`; it counted the 7 filtered rows as all of them.
-  - CADD's and AlphaMissense's refusal of a score file of the other build reads `the run's assembly is <name>`; it read `--assembly is <name>` in a run that gave no `--assembly`.
-  - `ClinPred` names an empty score cell as the empty string on the per-row plugin route, through the provided trait method `BuiltinPlugin::run_naming_empty_strings`.
-  - LOEUF prints the white space after a table row's last cell, as Ensembl VEP does, and `match_by=gene` reads a cell with white space around its number.
-  - A plugin table's allele cell of the single digit `0` is trimmed as Ensembl VEP trims it: a trim stops at it, and a first-base strip leaving it writes `-`.
-  - `--plugin SpliceAI` writes every entry of a score record that names a row's gene: joined in `SpliceAI_pred`, comma-joined in each of the nine fields, with one `SpliceAI_cutoff` verdict over them.
-  - `--plugin MaxEntScan` multiplies whole-number matrix entries as integers while a product fits 64 bits, as Ensembl VEP's plugin does, where a product in doubles could move a score's third decimal.
-  - `--plugin MaxEntScan` writes none of its fields on a row whose matrix entries multiply to zero or less, where Ensembl VEP's plugin dies, and the warnings file names the failure.
-  - `--plugin MaxEntScan` reads a matrix line in every spelling of an infinity or a not-a-number that Perl converts without a warning, such as `nanq`, `nan(1)` and `1.#INF`.
-  - A plugin's table without its `.tbi` beside a `.vpd` store of another index version is refused naming the store, its version and the conversion that rebuilds it.
-  - `UTRAnnotator` writes one row for an insertion at a start codon however the record writes it, reading the lost stop, the frameshift and the gained start from the changed sequence.
-  - `UTRAnnotator` names the copy nearer the cap as the gained start of a duplicated upstream start codon, whichever side of the codon the record writes the duplication.
-  - `UTRAnnotator` annotates a symbolic inversion inside one 5' UTR exon as its span replaced by its reverse complement.
-  - `UTRAnnotator` annotates the loss alternate (`<DEL>`, `<CN0>`) of a structural record with several alternates as the deletion of the record's span, when the record writes `END`.
-  - On GRCh37 a `--custom` tabix file that names its mitochondrial contig `M` is read for no record written `MT` or `chrMT`, as Ensembl VEP reads it for none.
-  - On GRCh37 `--check_svs` reads no `chrM` or `M` record of its file for the cache's `MT`.
-  - On GRCh37 LoFTEE's ancestor FASTA is read for a mitochondrial record under `MT` or `chrMT` alone, unless its `chrM` or `M` sequence has the assembly's 16,569 bases.
-  - A built-in plugin the run refuses for a missing `--fasta` or `--hgvs` is refused before it reads its parameters, so the refusal is the only line it writes.
-  - A built-in plugin that fails to load is named once in its warning, `Failed to instantiate plugin <name>: <reason>`, and in the `--safe` error, where the line named it twice.
-  - Two `--custom` sources sharing a short name, one asking for `summary_stats`, print that source's statistics in either order, a `count` of 0 included, as Ensembl VEP does.
-  - Beside a data file with no tabix index, CADD reads a `.vpd` store built on the columns the file's header names and refuses any other, naming the rebuild flags.
-  - A plugin's refusal of a `.vpd` store beside a data file with no tabix index ends with `--no-verify`, which `convert-plugin-data` needs there, where it names that conversion.
+  - A `.vpd` store whose index names one chromosome twice, or out of position order, is refused; the later entry was read. (#124)
+  - The warning of a refused `.vpd` store carries the refusal's own text; it opened with `plugin initialization failed:` though the plugin loaded from its data file. (#124)
+  - Under an output key two built-in plugins write (a TranscriptAnnotator `prefix=` naming another plugin's field), each row prints the value of the plugin loaded later, an undefined value included. (#124)
+  - PrimateAI writes an empty score cell with a filled cell after it as the empty string, an empty tab cell and `""` in JSON, as Ensembl VEP does. (#124)
+  - `--custom` with `type=exact` lists a VCF row whose `POS` is spelt with a sign, a fraction, an exponent or a leading zero exactly where Ensembl VEP lists it. (#124)
+  - `--custom` lists a row whose start is 0 or led by a minus sign among the rows written at base 1 in the file's order, as Ensembl VEP does. (#124)
+  - A `--custom` source's whole-number `distance` is compared with the difference between a record's end and the variant's exactly past 2^53, as Ensembl VEP compares it. (#124)
+  - Rows of a `--custom` file that follow a start cell at 2^63 - 1 or above are listed, as Ensembl VEP lists them; plugin tables read alike. (#124)
+  - `LoFTEE` keys of the other assembly (`gerp_end_trunc_cutoff` on GRCh37, `skip_lof_info` on GRCh38) are named in a status line, as Ensembl VEP writes no warning; the warnings file gained a line. (#124)
+  - A `.vpd` store whose index differs from its recorded SHA256 is refused; an index altered past its header was read. (#124)
+  - A plugin checks for its data file's `.tbi` before reading the header unless a complete `.vpd` store with a current index lies beside it; any `.vpd` file skipped the check. (#124)
+  - The plugin pages name the fifteen plugins that read a `.vpd` store and say LOEUF reads its data file through tabix alone; they had every tabix plugin reading a store. (#124)
+  - The LoFTEE page says that under `check_complete_cds:true` both engines filter the frameshift rows on a `cds_end_NF` transcript that carry an exon number, 7 of the golden corpus's 10. (#124)
+  - The LoFTEE page says the 3 such rows without an exon number stay at `LoF=HC`; it counted the 7 filtered rows as all of them. (#124)
+  - CADD's and AlphaMissense's refusal of a score file of the other build reads `the run's assembly is <name>`; it read `--assembly is <name>` in a run that gave no `--assembly`. (#124)
+  - `ClinPred` names an empty score cell as the empty string on the per-row plugin route, through the provided trait method `BuiltinPlugin::run_naming_empty_strings`. (#124)
+  - LOEUF prints the white space after a table row's last cell, as Ensembl VEP does, and `match_by=gene` reads a cell with white space around its number. (#124)
+  - A plugin table's allele cell of the single digit `0` is trimmed as Ensembl VEP trims it: a trim stops at it, and a first-base strip leaving it writes `-`. (#124)
+  - `--plugin SpliceAI` writes every entry of a score record that names a row's gene: joined in `SpliceAI_pred`, comma-joined in each of the nine fields, with one `SpliceAI_cutoff` verdict over them. (#124)
+  - `--plugin MaxEntScan` multiplies whole-number matrix entries as integers while a product fits 64 bits, as Ensembl VEP's plugin does, where a product in doubles could move a score's third decimal. (#124)
+  - `--plugin MaxEntScan` writes none of its fields on a row whose matrix entries multiply to zero or less, where Ensembl VEP's plugin dies, and the warnings file names the failure. (#124)
+  - `--plugin MaxEntScan` reads a matrix line in every spelling of an infinity or a not-a-number that Perl converts without a warning, such as `nanq`, `nan(1)` and `1.#INF`. (#124)
+  - A plugin's table without its `.tbi` beside a `.vpd` store of another index version is refused naming the store, its version and the conversion that rebuilds it. (#124)
+  - `UTRAnnotator` writes one row for an insertion at a start codon however the record writes it, reading the lost stop, the frameshift and the gained start from the changed sequence. (#124)
+  - `UTRAnnotator` names the copy nearer the cap as the gained start of a duplicated upstream start codon, whichever side of the codon the record writes the duplication. (#124)
+  - `UTRAnnotator` annotates a symbolic inversion inside one 5' UTR exon as its span replaced by its reverse complement. (#124)
+  - `UTRAnnotator` annotates the loss alternate (`<DEL>`, `<CN0>`) of a structural record with several alternates as the deletion of the record's span, when the record writes `END`. (#124)
+  - On GRCh37 a `--custom` tabix file that names its mitochondrial contig `M` is read for no record written `MT` or `chrMT`, as Ensembl VEP reads it for none. (#124)
+  - On GRCh37 `--check_svs` reads no `chrM` or `M` record of its file for the cache's `MT`. (#124)
+  - On GRCh37 LoFTEE's ancestor FASTA is read for a mitochondrial record under `MT` or `chrMT` alone, unless its `chrM` or `M` sequence has the assembly's 16,569 bases. (#124)
+  - A built-in plugin the run refuses for a missing `--fasta` or `--hgvs` is refused before it reads its parameters, so the refusal is the only line it writes. (#124)
+  - A built-in plugin that fails to load is named once in its warning, `Failed to instantiate plugin <name>: <reason>`, and in the `--safe` error, where the line named it twice. (#124)
+  - Two `--custom` sources sharing a short name, one asking for `summary_stats`, print that source's statistics in either order, a `count` of 0 included, as Ensembl VEP does. (#124)
+  - Beside a data file with no tabix index, CADD reads a `.vpd` store built on the columns the file's header names and refuses any other, naming the rebuild flags. (#124)
+  - A plugin's refusal of a `.vpd` store beside a data file with no tabix index ends with `--no-verify`, which `convert-plugin-data` needs there, where it names that conversion. (#124)
 
 - Documentation, test corpora and comparison tools
   - The cache, prediction, plugin-data, plugin-writing and output pages, the README's Crates table and six crate READMEs state what the code does: FASTA refusals, `contig_order`, `.bgz` stores, per-gene row order. (#117)
   - Doc comments in eight crates state what the code beside them does, `PluginRegistry::plugins`, `LazyTranscriptIndexes` and `EffectsConfig::loftee_context` among them. (#117)
   - The divergence index states the rate of `revel_other_reference_amino_acid_rows` by output rows, as its page counts it. (#117)
-  - `scripts/docs/build_release_site.sh` sends a redirect whose destination anchor the release's page lacks to the heading of the source's own anchor name where that page carries it, else to the page.
-  - `scripts/docs/mdbook_repo_links.py` refuses a README or other repository file that is not UTF-8 in one line naming the file and the byte offset.
-  - The plugin support table's Terms cells for BayesDel and dbNSFP state what each Ensembl VEP plugin module says of its data's terms, with its lines.
-  - The LOEUF section of `docs/plugins/annotation-store.md` says the by-transcript table is the one to prepare for GRCh37: the plugin's documentation names the by-gene table, which both engines' header checks refuse.
-  - The documentation site's version selector opens only a listed documentation version on the site's own origin.
-  - `scripts/fixtures/cut_plugin_regions.py` keeps the entries other fixture generators record under `plugin_fixtures` in a corpus's `provenance.json`; a cut dropped them.
-  - `scripts/docs/check_site_links.py` reads the redirect table of `book.toml` and fails on a destination page or heading the built site lacks; a redirect that landed nowhere passed the Pages job.
-  - `run_clone_measurement.sh` refuses a fastVEP cell whose transcript cache file is absent or empty, where fastVEP would parse the GFF3 instead; its row reads `fastvep_cache_missing`.
-  - `vep-golden-corpus select` and a `flag-set` rewrite refuse to discard a `divergences` entry that carries `vep_rs_consequence_sets_with_reference_sequence` unless `--drop-reference-statements` is given.
-  - The API documentation of `InputVariant::input_record` states what the number counts for each input format and which parts of a run read it.
-  - The golden tests accept the warnings-file line vep-rs writes when a run asks for known variants from a cache without variation data, on a corpus whose cache holds none.
-  - `scripts/fixtures/cut_plugin_regions.py` cuts a corpus reference around a record named by a chromosome synonym of the corpus cache's `chr_synonyms.txt`, where it refused the record.
-  - `cut_plugin_regions.py` asks a tool for its version only when the cut runs it.
-  - The `provenance.json` of the corpus `GRCh38-plugin-loftee` names the commit of Ensembl VEP's LoF plugin that wrote its stored rows, under `plugin_source`; it named the branch alone.
-  - The shell tests and the dataset seeder read each piped writer to its end, where a pipe into `grep -q` under pipefail could fail a check that should pass.
-  - One test holds every shell file to reading its piped writers to the end.
-  - `scripts/fixtures/cut_plugin_regions.py` prints `reference_bases_kept` 0 for a cut that writes no reference, where it counted the reference's regions.
-  - The help of `cut_plugin_regions.py` says that each masked FASTA keeps the contig lengths of its own index.
-  - The comparison oracle reads its lookup tables as here-strings; a table piped into an awk that leaves at its first match could end a run with status 141 under pipefail.
-  - Such a run wrote nothing on standard error; the oracle's tests hold the here-string form.
-  - `reproduce_plugin_concordance.py` names each container of its `utrannotator-sweep` step for the file it writes, so two steps that fill different directories run side by side on one host.
-  - The score line that `reproduce_plugin_concordance.py --dry-run` prints carries `--engine-binary`, as the command the run executes does.
-  - `scripts/docs/check_site_links.py` fails on a Markdown file under `docs/` whose page the built site lacks; a page missing from `docs/SUMMARY.md` stayed out of the site while the Pages job passed.
-  - `prune_json_cache.py` prints `distinct_transcripts_per_chromosome`, each transcript counted once, beside `transcripts_per_chromosome`, which counts a transcript once for each shard that stores it.
-  - `scripts/fixtures/cut_plugin_regions.py` cuts a corpus reference around a record on a sequence the corpus cache holds no transcript of, where it refused the record.
-  - `cut_plugin_regions.py` starts a bigWig region whose flank passes a contig's first base at that base.
-  - The reference generator and the measurement harness read their tables as here-strings: under pipefail, a table piped into an awk that leaves early could end a run with status 141.
-  - `scripts/concordance/plugin_gate_runs.toml` hands the scorer the input of its `loftee_grch38` run.
-  - With it, the LoFTEE classes that read a record's alleles, or the reference bases an allele stands in for, set aside their rows on ClinVar, whose records stand under identifiers.
-  - `plugin_data_layout.sh` names the gnomADMt file with its index and the UTRAnnotator table of each assembly, and `setup_plugin_data.sh` prints their sources and stages both.
-  - Every plugin data path of `scripts/concordance/plugin_gate_runs.toml` is a file the layout stages.
-  - `scripts/docs/test_contributor_guide.py` holds both guides to the advisory allowlist file and the manifests to every tool root, and reads a multi-line step of the Advisory Reachability job as no command.
-  - The `GRCh38-identifiers` manifest counts the rows of its two-base substitutions under `mnv_or_complex` in `variant_classes`, where it counted them as insertions.
-  - Six corpus manifests whose selection the tree cannot run again state neither `variant_classes` nor `family_strata`.
-  - `vep-divergence-reevaluate` reads a relative `--vep`, `--ensembl-vep`, `--perl-cache-dir`, `--plugins-dir` or `--work-dir` from the directory it is called in; each engine ran in its output directory and every entry read `error`.
-  - The `--scored-engine` help of `vep-sv-compare` and the `vep-fastvep-normalize` page bound what they say fastVEP writes, raw symbolic alleles and four copy-number terms, to fastVEP through v0.5.0; tests hold both.
-  - `vep-formats-compare` refuses a comparison without `--run` where several runs of the manifest annotate the input and document a class of `--masks`; it read their items as one list.
-  - `crates/vep-cache-builder/README.md` names the two tools that write a transcript shard as a bare array, and nine source comments drop the statement that a converted cache holds map-shaped shards.
-  - `vep-golden-corpus classify --flag-set` carries a `vep_rs_consequence_sets_with_reference_sequence` stated on the manifest's own list into a flag set that has no list of its own, or refuses the run.
-  - The `vep-fastvep-normalize` page and the comments of the measurement harness bound the `Transcript` they say fastVEP writes in the Feature_type cell of an intergenic row to fastVEP through v0.4.0.
-  - A test holds the `vep-fastvep-normalize` page to it.
-  - `vep-golden-corpus classify --reference-fasta` names an `HGVSc` or `HGVS_OFFSET` shifted near a sequence edge under `hgvs_shift_sequence_edge_window`, asked of `vep-formats-compare field-class`, where it wrote `unexplained_residual`.
-  - `vep-cache-builder`'s README says what an `--auto` install leaves out, and two pages say what Ensembl VEP does with a missing ALT under `SVTYPE` and that GRCh37 carries no `TSL`.
-  - The compatibility page says Ensembl VEP writes a distribution chart without a FASTA when a database is connected.
-  - `docs/developers/writing-a-plugin.md` and the built-in plugins' comments give a plugin's assembly as the cache's own, else the value of `--assembly`; they named the flag alone.
-  - The `vep-core` README and the doc comments of `Assembly` and `resolve_assembly` state that a run parses the plugins' assembly hint from the cache's own name, else from `--assembly`.
-  - `docs/plugins/annotation-store.md` and the AlphaMissense plugin's module comment say that CADD and AlphaMissense refuse a data file of the other assembly by the run's assembly; they named `--assembly`.
-  - `vep-golden-corpus classify` names `shifted_allele_rotation_by_strand` on the `HGVSp` of an insertion on a reverse-strand transcript that the 3' shift moves past the allele's own length.
-  - `scripts/docs/render_release_figure.py` refuses by name a population dataset whose label holds no word, a figure with no mark of the reference and an empty wall-time panel.
-  - `scripts/concordance/run_concordance.sh` mounts the directory of a user's own plugin file only where its plugin runs.
-  - `run_concordance.sh` names the variable in one error line where that plugin directory is missing or cannot be entered.
-  - `scripts/concordance/feature_oracle.sh` reads a cache directory's reference file whose name opens with a dot, as `vep` does.
-  - Five RefSeq reproductions under `scripts/divergences/reproductions/` print the last line of their conversion log to standard error and stop where the conversion fails.
-  - `tools/vep-outputs-compare` ends on an error that names the output it cannot read again for the row-aware pair rules, not `discordant.tsv`.
-  - `tools/vep-outputs-compare` renames `discordant.tsv` to `.partial` on every stop of its comparison, and its key-order error names the same file and lines, and no key, at any thread count.
-  - `tools/vep-outputs-compare` documents that its row-aware pair rules read a Location, a cDNA position and a generated name's position up to 128 bits and leave a pair past it a difference.
-  - `vep-formats-compare` refuses with exit code 2 a row whose Location ends one below its start under `hgvs_added_bases_left_at_the_span_end`, naming the Location, as `vep-plugin-pairs` does.
-  - `vep-formats-compare` and `vep-plugin-pairs` read the rows behind each stream of a plugin table joined from several BGZF streams, as htslib 1.9 numbers and reads them.
-  - `vep-formats-compare` reads a span of a REVEL or SpliceAI table that starts at or below zero from the sequence's first position, as `tabix` reads it.
-  - The help of `vep-sv-compare` names the reference engine Ensembl VEP and, like the failure message of its cross-chromosome assertion, calls a vep-rs fault a defect; a test holds the sentences.
-  - `vep-formats-compare` beside `--reference-fasta`, and `vep-golden-corpus classify --reference-fasta`, name a frameshift's `HGVSp` shifted near a sequence edge under `hgvs_shift_sequence_edge_window`, where they left it a difference.
-  - The `vep-fastvep-normalize` page names the fastVEP versions each difference it leaves holds for and states the column counts, 17 in fastVEP's tab format, 14 in Ensembl VEP's default format.
-  - A test holds those sentences of the `vep-fastvep-normalize` page and the format the measurement harness asks fastVEP for.
-  - The regulatory page says that a `--regulatory_gff` value its grammar refuses carries Ensembl VEP's text, and that a missing file or index is refused in vep-rs's own words.
-  - The compatibility page's exit-status section says where a refusal's message carries Ensembl VEP's text, and names the two refusals that quote it after vep-rs's own words.
-  - `--regulatory_gff` documentation says that a file named by an `http://`, `https://` or `ftp://` URL is refused, where Ensembl VEP reads an `http://` or `ftp://` file over the network.
-  - The page of `shift_intron_term_unshifted_span` places its second worked deletion on the second base of exon 10 of ENST00000435744, `n.1288`, and ends the intron at 13065557, as the cache does.
-  - The compatibility page says that no `VEP_<FLAG>` variable sets `--phyloP` or `--phastCons`, in either engine, and names the configuration file key and the `VEP_CUSTOM` variable that add the source.
-  - `docs/plugins/annotation-store.md` and the index row of `opentargets_study_types_and_false` say that an empty `lead_variants_only` switches the OpenTargets lead filter off in both engines; they had every value but `0` and `1` refused.
-  - The `vep recode` page says which RefSeq cache is an input: one whose `info.json` declares the RefSeq set is refused.
-  - The `vep recode` page says a cache converted without the `source_type` key is read as the Ensembl set with its RefSeq models.
-  - The compatibility page says what an upper-case option letter is: `-J`, `-Q`, `-W` and `-X` name an option; `-A`, `-E`, `-I`, `-O`, `-S`, `-T` and `-U` are argument syntax errors.
-  - Ensembl VEP reads those seven letters as short options.
-  - `vep-sv-compare` types a structural record with several identifiers by its first, the name both engines write, in its per-type table.
-  - `vep-plugin-pairs` reads a score table under a `.csi` index, found in the order vep-rs searches.
-  - `vep-plugin-pairs` reads a span of a score table that starts at or below zero from the sequence's first position, as `tabix` reads it.
-  - The comparison class `stop_codon_overlap_insertion_range` reads a pure insertion from the input records where the comparison is given them, and leaves bases a record replaces under an identifier.
-  - The comparison class `hgvs_added_bases_written_outside_the_transcript` counts the bases a record adds from its alleles in every output format that carries them, in `vep-formats-compare` and `vep-plugin-pairs`.
-  - The comparison class `hgvs_insertion_left_where_the_shift_stops` counts a duplication's copy less the introns between its coordinates where `--json-cache` names the candidate's cache, in `vep-formats-compare` and `vep-plugin-pairs`.
-  - `vep-formats-compare --help` and its README state that a REVEL or SpliceAI score table is read under its `.tbi` index, the one vep-rs demands of the table.
-  - The `vep-outputs-compare` README states that the adjusted precision, recall and F1 read 0 where every tuple is set aside.
-  - `vep-golden-corpus classify --flag-set` runs on a flag set whose input is a file of region lines, naming each record by its line, and a refusal there prints no allele.
-  - The exit-status section of the compatibility page names the three refusals whose message carries a second line, and the `--tmpdir` row and help text say the flag places no file.
-  - The `VEP_FASTA_STORAGE` row lists every spelling read and the files the variable holds for, and the checksum page says that a cache converted by `tools/vep-storable-to-json` carries no manifest.
-  - The page of `plugin_cols_names_matched_exactly` cites `OpenTargets.pm` lines 218-224 and 219 and `TranscriptAnnotator.pm` line 200 for the statements it names; a test holds the citations.
-  - `vep-formats-compare` under `order_only` accepts two JSON `domains` arrays that one `DOMAINS` list gives in two orders, where it reported an object repeated for another entry as a difference.
-  - `vep-parquet-to-tab --canonical` and the Parquet comparison of `vep-formats-compare` keep a cell of an INT32-named column that is no INT32 as written, where they printed `-`, the text of NULL.
-  - `vep-parquet-to-tab --canonical` and the Parquet comparison of `vep-formats-compare` read a column a Parquet output stores as strings as stored, on both sides, where they reprinted it by its name.
-  - The page of `plugin_cols_names_matched_exactly` describes the fixed-name test of `TranscriptAnnotator.pm` line 115 as the case-insensitive prefix test it is, which vep-rs makes too; tests hold the sentence and the check.
-  - The `vep recode` page names `output` among the components of its errors and counts a value outside an option's list among the syntax errors.
-  - `vep-formats-compare` sets aside the reference `Amino_acids` and the `protein_altering_variant` term beside the Codons of `refseq_edited_model_deleted_span_codons`, and the entry's page documents both with two ClinVar rows.
-  - The format comparator sets aside the reference `Codons` and `Amino_acids` of an insertion on bases an edited RefSeq model holds and the genome lacks, under `refseq_edited_model_inserted_span_codons`, read from `--json-cache`.
-  - `vep-formats-compare` sets aside, under `refseq_edited_model_hgvsc_offset`, the HGVSc of a deletion across the bases a RefSeq model's alignment deleted, whose span Ensembl VEP closes later by those bases.
-  - The page of `refseq_edited_model_hgvsc_offset` works `rs1179352929` through (`docs/divergences/refseq-edited-model-hgvsc.md`).
-  - `vep-plugin-pairs compare` counts two `5UTR_annotation` values as a match where they hold the same groups of the same pairs in another order, as Ensembl VEP's UTRAnnotator writes them.
-  - The class table of `vep-outputs-compare` and `vep-sv-compare` reports cites each Ensembl VEP block to its closing brace, and one statement of `OutputFactory.pm` by its sub.
-  - `vep-formats-compare --json-cache` reads a coding sequence that ends inside a codon for `hgvsp_stop_named_on_incomplete_coding_sequence`, so a frameshift row of a transcript no flag marks incomplete reads under the class.
-  - `vep-formats-compare` reads `SHIFT_LENGTH` and the three position fields of an indel near a sequence edge under `hgvs_shift_sequence_edge_window`, where each engine's value is its own walk's.
-  - `vep-formats-compare` sets aside under `colocated_list_cut_at_cache_cap` a JSON `var_synonyms` list whose cut piece Ensembl VEP prints as a number without its closing point; the list, rebuilt one byte short, was reported.
-  - `scripts/concordance/feature_oracle.sh` compares the warnings files of the one format a case names beside `warnings` without `default`, so `json,warnings` reads the JSON runs' warnings.
-  - `feature_oracle.sh` keeps its column names under a variable bash does not set, so a real run started in a terminal passes the header check where it read the terminal's width.
-  - The reproduction of `refseq_edited_model_intron_span_coding_reference` compares the `Amino_acids` and `Codons` cells of both engines beside the terms, the positions and `HGVSp`, and its page names them; a test holds both.
-  - `vep-parquet-to-tab` prints a tab column named as a key column (a plugin's `ref` or `alt`) from its own field, where it printed the key column's cell and shifted the row.
-  - The custom annotation page says where a row lists the `...` marker of `num_records` and counts the repeat of `custom_exact_source_allele_record_accumulation` by the rows of the record's own allele.
-  - The entry `custom_exact_source_allele_record_accumulation` stands at tier 2, since an ordinary record of several alternates reaches it under a `num_records` below its matches.
-  - The Polars recipe of the Parquet page sorts by `contig_index` before it selects its columns; with the select first Polars ended it with `ColumnNotFoundError`.
-  - `vep-formats-compare --format parquet` reads both outputs through its stream of record groups and holds 0.7 GiB on 136.6 million rows, where it held about 5.5 GiB a million rows.
-  - `docs/divergences/skipped-variants-file-header.md` says the fields re-joined with tabs under `--delimiter` are a VCF line's, and that an Ensembl-format line is quoted as read, as Ensembl VEP quotes it.
-  - The comparison runner accepts a compressed FASTA indexed as `<name>.fa.gz.fai`, the name `samtools faidx` gives the index, beside the `<name>.fa.fai` spelling.
-  - The comparison runner reads a candidate pin as text: candidates pinned `1` and `1.0` each keep their own status row, where both took both rows.
-  - `vep-sv-compare` sets aside the `<CNV:TR>` pair of a loss that a run without a FASTA reads as a gain, `feature_elongation` beside the reference's deletion.
-  - The entry `custom_exact_source_allele_record_accumulation` documents a second shape in `docs/custom-annotation.md`: an `exact` record under a short name that spells `ZYG`, `NEAREST` or `SV`, which Ensembl VEP repeats once for each row.
-  - `vep-sv-compare` sets aside a `<CNV:TR>` record's symbolic `splice_polypyrimidine_tract_variant` where the cache shows that the run overlaps an intron's tract and no exon and the literal reading's span overlaps no tract.
-  - `docs/intended-divergences.md` names every comparison that sets an entry's rows aside under its name: the SNP/indel, structural-variant and statistics comparators and the plugin tuple scorer join the three it listed.
-  - The format comparator's class `gxf_reverse_strand_utr_sequence` reads a row only where its `SOURCE` in the reference names a GTF or GFF file, so a cache transcript's stop count stays a difference.
-  - `vep-formats-compare` reads `GIVEN_REF` for the spliced allele of `refseq_edited_model_deleted_span_codons` where `--hgvs` leaves a shifted deletion's bases in `USED_REF`, so the class takes those rows' Codons and Amino_acids.
-  - `docs/cache-setup.md` and the cache builder's README state that a native cache holds the release's `protein_feature` rows once, so `DOMAINS` can name other features than Ensembl's cache.
-  - The `prepare` step of the `contig_absent_from_fasta` reproduction reads its pipe to the end, where it ended with exit code 141 at times; a test holds every committed step to that.
-  - The reproduction of `bgzf_block_overstated_isize` compares the rows each engine writes; it held Ensembl VEP to two gzip error lines, which gzip prints once or twice, and could read `changed`.
-  - The page of `refseq_edited_model_hgvsc_offset` names its Ensembl model in the opening paragraph, states the comparison's count test and gives the corpus tool's verdict on section 3's rows.
-  - The page of `hgvs_shift_sequence_edge_window` counts its eight ClinVar records under the shift flags among the 14 near a sequence end, and defines a slice, a walk and a corpus.
-  - `docs/divergences/phylop-short-name.md` and the help of `--ucsc_data_root` give `--phastCons` its own file under `phastCons<N>way`, where each gave the `phyloP<N>way` path for both shortcuts.
-  - `docs/divergences/hgvsp-stop-codon-protein-comparison.md` says that any Ensembl VEP value stays a difference where vep-rs writes no `HGVSp`, and that the type is read from the codon window's peptides.
-  - The page of `colocated_list_cut_at_cache_cap` says which separator starts a stored stretch, what a `%3B` counts as, and which id a JSON pair or a row may lack.
-  - The page of `refseq_edited_model_seam_insertion_hgvsc` says that its 114 rows are those written on the added bases and lists the mapper pair behind the two cDNA numbers of section 2.4.
-  - The page of `hgvs_insertion_left_where_the_shift_stops` gives the 3' shift's bound on both strands: an allele of 1,001 bases on a reverse-strand transcript is not moved; a test holds the sentence.
-  - `docs/output/json.md` lists `minor_allele` and `minor_allele_freq` among the columns a `colocated_variants` object carries from a cache whose `variation_cols` declare them.
-  - `docs/cache-setup.md` and the cache builder's README state that a cache Ensembl publishes can name a protein feature's analysis by another label than a native cache writes in `DOMAINS`.
-  - `docs/divergences/defect-c.md` says where Ensembl VEP writes a `<CNV:TR>` record: at another Location only with a FASTA and a trimmed expansion, at the run or not at all otherwise.
-  - `scripts/concordance/README.md` says that `discordant.tsv` holds one row for each tuple one output alone holds, and that `summary.json` counts tuples.
-  - `docs/cli/compatibility.md` cites `Config.pm:934-937`, the block that forces quiet for an output named `stdout`, where it cited the comment line above it.
-  - `--exclude_predicted`: its help says the filter reads every transcript, so it also drops predicted models of an Ensembl cache named by RefSeq accession and of a GTF or GFF3.
-  - `--delimiter`: its help names every kind of value the run refuses, an empty value, a zero-width assertion, a look-around and a class over characters outside ASCII among them.
-  - `docs/cache-conversion.md` says that a cache built with `--core-dumps` carries each translation's sequence edits, and that a build without the dumps writes an empty list.
-  - `docs/cache-conversion.md` names the stop-codon readthrough edit among the sequence edits a conversion carries.
-  - `docs/cache-from-gtf-or-gff3.md` says that a RefSeq GFF3 holds the mature miRNA arms in a record neither engine reads, where it had no GFF3 carry them.
-  - `crates/vep-fasta/README.md` names each use the crate makes of `tracing`: two reports of a block that does not inflate, a debug line and a warning; the crate made one in 0.6.0.
-  - `docs/cli/compatibility.md` limits two claims: Ensembl VEP reads a value's first letter for `--sift` and `--polyphen` alone, and leaves a column out for a false `--sift`, `--polyphen` or `--nearest` alone.
-  - `--tmpdir`: its help and its row name the FATHMM plugin, which vep-rs does not port, as the one Ensembl VEP module that reads the flag.
-  - `docs/cli/compatibility.md` says that a flag accepted without effect changes no annotation, and `tests/parity/README.md` that a run records such a flag in its command line.
-  - `docs/divergences/gxf-malformed-coordinate-line-refused.md` counts 28,494 feature lines in the committed GTF and GFF files, where it gave that figure as the count of their lines.
-  - `--transcript_filter`: its help says that the filter grammar drops a `^` and what stands before it in a word, so `^X._` reads as `X._`.
-  - `--transcript_filter`: its help says a pattern is read as Perl reads it, and that a back-reference or another construct the `regex` crate cannot express is an error.
-  - `tests/parity/README.md` and the parity-row recipe say that a flag accepted without effect leaves the output the same apart from the header lines recording the command line and the run's time.
-  - `docs/getting-started/coming-from-ensembl-vep.md` names the three flags accepted without effect that Ensembl VEP reads and the one its FATHMM plugin reads; `tests/parity/README.md` likens to Ensembl VEP only flags it reads nothing from.
-  - `docs/custom-annotation.md` says a VCF source matches a record with an `SVTYPE` by span only where its ALT is not bases alone, and every record against a structural input record.
-  - The page of `duplicate_output_column_collapsed` and its index row say Ensembl VEP's tab and VCF writers append every `--custom` key, a source's field key such as `gnomADg_AF` under `--af_gnomadg` among them.
-  - In 0.6.0 that page and row named the short name alone.
-  - `docs/cache-setup.md` names the component of a cache-resolution error: `config` for an unreadable `--synonyms` file, `custom` where a run with a GFF or GTF transcript source has no cache, `cache` otherwise.
-  - `docs/cache-setup.md` states that on a contig the FASTA lacks vep-rs reads an insertion's HGVSc, and the HGVSp of an allele the 3' shift moves, where the record writes it.
-  - `docs/cache-setup.md` says that an installation keeps a `dna/` genome FASTA that is already BGZF and recompresses only one that is not, then indexes it.
-  - `docs/intended-divergences.md` does not set mask classes apart from the nineteen concordance classes: `splice_family_swap`, `start_cooccurrence_swap`, `reference_skipped_record` and `bnd_own_chromosome_rows_lost` are both.
-  - The entry `merged_same_stable_id_collapse` and its index row name the copy Ensembl VEP keeps of a stable identifier a buffer loads twice: the first-listed `ensembl`-sourced copy, else the lowest `dbID`.
-  - The index row of `transcript_filter_abbreviated_fields` says vep-rs refuses a pattern the `regex` crate cannot express; in 0.6.0 it named every pattern outside the crate's dialect.
-  - The workspace's tests pass on a file system that folds case or refuses a file name outside UTF-8, leaving out the assertions and runs that need such names.
+  - `scripts/docs/build_release_site.sh` sends a redirect whose destination anchor the release's page lacks to the heading of the source's own anchor name where that page carries it, else to the page. (#124)
+  - `scripts/docs/mdbook_repo_links.py` refuses a README or other repository file that is not UTF-8 in one line naming the file and the byte offset. (#124)
+  - The plugin support table's Terms cells for BayesDel and dbNSFP state what each Ensembl VEP plugin module says of its data's terms, with its lines. (#124)
+  - The LOEUF section of `docs/plugins/annotation-store.md` says the by-transcript table is the one to prepare for GRCh37: the plugin's documentation names the by-gene table, which both engines' header checks refuse. (#124)
+  - The documentation site's version selector opens only a listed documentation version on the site's own origin. (#124)
+  - `scripts/fixtures/cut_plugin_regions.py` keeps the entries other fixture generators record under `plugin_fixtures` in a corpus's `provenance.json`; a cut dropped them. (#124)
+  - `scripts/docs/check_site_links.py` reads the redirect table of `book.toml` and fails on a destination page or heading the built site lacks; a redirect that landed nowhere passed the Pages job. (#124)
+  - `run_clone_measurement.sh` refuses a fastVEP cell whose transcript cache file is absent or empty, where fastVEP would parse the GFF3 instead; its row reads `fastvep_cache_missing`. (#124)
+  - `vep-golden-corpus select` and a `flag-set` rewrite refuse to discard a `divergences` entry that carries `vep_rs_consequence_sets_with_reference_sequence` unless `--drop-reference-statements` is given. (#124)
+  - The API documentation of `InputVariant::input_record` states what the number counts for each input format and which parts of a run read it. (#124)
+  - The golden tests accept the warnings-file line vep-rs writes when a run asks for known variants from a cache without variation data, on a corpus whose cache holds none. (#124)
+  - `scripts/fixtures/cut_plugin_regions.py` cuts a corpus reference around a record named by a chromosome synonym of the corpus cache's `chr_synonyms.txt`, where it refused the record. (#124)
+  - `cut_plugin_regions.py` asks a tool for its version only when the cut runs it. (#124)
+  - The `provenance.json` of the corpus `GRCh38-plugin-loftee` names the commit of Ensembl VEP's LoF plugin that wrote its stored rows, under `plugin_source`; it named the branch alone. (#124)
+  - The shell tests and the dataset seeder read each piped writer to its end, where a pipe into `grep -q` under pipefail could fail a check that should pass. (#124)
+  - One test holds every shell file to reading its piped writers to the end. (#124)
+  - `scripts/fixtures/cut_plugin_regions.py` prints `reference_bases_kept` 0 for a cut that writes no reference, where it counted the reference's regions. (#124)
+  - The help of `cut_plugin_regions.py` says that each masked FASTA keeps the contig lengths of its own index. (#124)
+  - The comparison oracle reads its lookup tables as here-strings; a table piped into an awk that leaves at its first match could end a run with status 141 under pipefail. (#124)
+  - Such a run wrote nothing on standard error; the oracle's tests hold the here-string form. (#124)
+  - `reproduce_plugin_concordance.py` names each container of its `utrannotator-sweep` step for the file it writes, so two steps that fill different directories run side by side on one host. (#124)
+  - The score line that `reproduce_plugin_concordance.py --dry-run` prints carries `--engine-binary`, as the command the run executes does. (#124)
+  - `scripts/docs/check_site_links.py` fails on a Markdown file under `docs/` whose page the built site lacks; a page missing from `docs/SUMMARY.md` stayed out of the site while the Pages job passed. (#124)
+  - `prune_json_cache.py` prints `distinct_transcripts_per_chromosome`, each transcript counted once, beside `transcripts_per_chromosome`, which counts a transcript once for each shard that stores it. (#124)
+  - `scripts/fixtures/cut_plugin_regions.py` cuts a corpus reference around a record on a sequence the corpus cache holds no transcript of, where it refused the record. (#124)
+  - `cut_plugin_regions.py` starts a bigWig region whose flank passes a contig's first base at that base. (#124)
+  - The reference generator and the measurement harness read their tables as here-strings: under pipefail, a table piped into an awk that leaves early could end a run with status 141. (#124)
+  - `scripts/concordance/plugin_gate_runs.toml` hands the scorer the input of its `loftee_grch38` run. (#124)
+  - With it, the LoFTEE classes that read a record's alleles, or the reference bases an allele stands in for, set aside their rows on ClinVar, whose records stand under identifiers. (#124)
+  - `plugin_data_layout.sh` names the gnomADMt file with its index and the UTRAnnotator table of each assembly, and `setup_plugin_data.sh` prints their sources and stages both. (#124)
+  - Every plugin data path of `scripts/concordance/plugin_gate_runs.toml` is a file the layout stages. (#124)
+  - `scripts/docs/test_contributor_guide.py` holds both guides to the advisory allowlist file and the manifests to every tool root, and reads a multi-line step of the Advisory Reachability job as no command. (#124)
+  - The `GRCh38-identifiers` manifest counts the rows of its two-base substitutions under `mnv_or_complex` in `variant_classes`, where it counted them as insertions. (#124)
+  - Six corpus manifests whose selection the tree cannot run again state neither `variant_classes` nor `family_strata`. (#124)
+  - `vep-divergence-reevaluate` reads a relative `--vep`, `--ensembl-vep`, `--perl-cache-dir`, `--plugins-dir` or `--work-dir` from the directory it is called in; each engine ran in its output directory and every entry read `error`. (#124)
+  - The `--scored-engine` help of `vep-sv-compare` and the `vep-fastvep-normalize` page bound what they say fastVEP writes, raw symbolic alleles and four copy-number terms, to fastVEP through v0.5.0; tests hold both. (#124)
+  - `vep-formats-compare` refuses a comparison without `--run` where several runs of the manifest annotate the input and document a class of `--masks`; it read their items as one list. (#124)
+  - `crates/vep-cache-builder/README.md` names the two tools that write a transcript shard as a bare array, and nine source comments drop the statement that a converted cache holds map-shaped shards. (#124)
+  - `vep-golden-corpus classify --flag-set` carries a `vep_rs_consequence_sets_with_reference_sequence` stated on the manifest's own list into a flag set that has no list of its own, or refuses the run. (#124)
+  - The `vep-fastvep-normalize` page and the comments of the measurement harness bound the `Transcript` they say fastVEP writes in the Feature_type cell of an intergenic row to fastVEP through v0.4.0. (#124)
+  - A test holds the `vep-fastvep-normalize` page to it. (#124)
+  - `vep-golden-corpus classify --reference-fasta` names an `HGVSc` or `HGVS_OFFSET` shifted near a sequence edge under `hgvs_shift_sequence_edge_window`, asked of `vep-formats-compare field-class`, where it wrote `unexplained_residual`. (#124)
+  - `vep-cache-builder`'s README says what an `--auto` install leaves out, and two pages say what Ensembl VEP does with a missing ALT under `SVTYPE` and that GRCh37 carries no `TSL`. (#124)
+  - The compatibility page says Ensembl VEP writes a distribution chart without a FASTA when a database is connected. (#124)
+  - `docs/developers/writing-a-plugin.md` and the built-in plugins' comments give a plugin's assembly as the cache's own, else the value of `--assembly`; they named the flag alone. (#124)
+  - The `vep-core` README and the doc comments of `Assembly` and `resolve_assembly` state that a run parses the plugins' assembly hint from the cache's own name, else from `--assembly`. (#124)
+  - `docs/plugins/annotation-store.md` and the AlphaMissense plugin's module comment say that CADD and AlphaMissense refuse a data file of the other assembly by the run's assembly; they named `--assembly`. (#124)
+  - `vep-golden-corpus classify` names `shifted_allele_rotation_by_strand` on the `HGVSp` of an insertion on a reverse-strand transcript that the 3' shift moves past the allele's own length. (#124)
+  - `scripts/docs/render_release_figure.py` refuses by name a population dataset whose label holds no word, a figure with no mark of the reference and an empty wall-time panel. (#124)
+  - `scripts/concordance/run_concordance.sh` mounts the directory of a user's own plugin file only where its plugin runs. (#124)
+  - `run_concordance.sh` names the variable in one error line where that plugin directory is missing or cannot be entered. (#124)
+  - `scripts/concordance/feature_oracle.sh` reads a cache directory's reference file whose name opens with a dot, as `vep` does. (#124)
+  - Five RefSeq reproductions under `scripts/divergences/reproductions/` print the last line of their conversion log to standard error and stop where the conversion fails. (#124)
+  - `tools/vep-outputs-compare` ends on an error that names the output it cannot read again for the row-aware pair rules, not `discordant.tsv`. (#124)
+  - `tools/vep-outputs-compare` renames `discordant.tsv` to `.partial` on every stop of its comparison, and its key-order error names the same file and lines, and no key, at any thread count. (#124)
+  - `tools/vep-outputs-compare` documents that its row-aware pair rules read a Location, a cDNA position and a generated name's position up to 128 bits and leave a pair past it a difference. (#124)
+  - `vep-formats-compare` refuses with exit code 2 a row whose Location ends one below its start under `hgvs_added_bases_left_at_the_span_end`, naming the Location, as `vep-plugin-pairs` does. (#124)
+  - `vep-formats-compare` and `vep-plugin-pairs` read the rows behind each stream of a plugin table joined from several BGZF streams, as htslib 1.9 numbers and reads them. (#124)
+  - `vep-formats-compare` reads a span of a REVEL or SpliceAI table that starts at or below zero from the sequence's first position, as `tabix` reads it. (#124)
+  - The help of `vep-sv-compare` names the reference engine Ensembl VEP and, like the failure message of its cross-chromosome assertion, calls a vep-rs fault a defect; a test holds the sentences. (#124)
+  - `vep-formats-compare` beside `--reference-fasta`, and `vep-golden-corpus classify --reference-fasta`, name a frameshift's `HGVSp` shifted near a sequence edge under `hgvs_shift_sequence_edge_window`, where they left it a difference. (#124)
+  - The `vep-fastvep-normalize` page names the fastVEP versions each difference it leaves holds for and states the column counts, 17 in fastVEP's tab format, 14 in Ensembl VEP's default format. (#124)
+  - A test holds those sentences of the `vep-fastvep-normalize` page and the format the measurement harness asks fastVEP for. (#124)
+  - The regulatory page says that a `--regulatory_gff` value its grammar refuses carries Ensembl VEP's text, and that a missing file or index is refused in vep-rs's own words. (#124)
+  - The compatibility page's exit-status section says where a refusal's message carries Ensembl VEP's text, and names the two refusals that quote it after vep-rs's own words. (#124)
+  - `--regulatory_gff` documentation says that a file named by an `http://`, `https://` or `ftp://` URL is refused, where Ensembl VEP reads an `http://` or `ftp://` file over the network. (#124)
+  - The page of `shift_intron_term_unshifted_span` places its second worked deletion on the second base of exon 10 of ENST00000435744, `n.1288`, and ends the intron at 13065557, as the cache does. (#124)
+  - The compatibility page says that no `VEP_<FLAG>` variable sets `--phyloP` or `--phastCons`, in either engine, and names the configuration file key and the `VEP_CUSTOM` variable that add the source. (#124)
+  - `docs/plugins/annotation-store.md` and the index row of `opentargets_study_types_and_false` say that an empty `lead_variants_only` switches the OpenTargets lead filter off in both engines; they had every value but `0` and `1` refused. (#124)
+  - The `vep recode` page says which RefSeq cache is an input: one whose `info.json` declares the RefSeq set is refused. (#124)
+  - The `vep recode` page says a cache converted without the `source_type` key is read as the Ensembl set with its RefSeq models. (#124)
+  - The compatibility page says what an upper-case option letter is: `-J`, `-Q`, `-W` and `-X` name an option; `-A`, `-E`, `-I`, `-O`, `-S`, `-T` and `-U` are argument syntax errors. (#124)
+  - Ensembl VEP reads those seven letters as short options. (#124)
+  - `vep-sv-compare` types a structural record with several identifiers by its first, the name both engines write, in its per-type table. (#124)
+  - `vep-plugin-pairs` reads a score table under a `.csi` index, found in the order vep-rs searches. (#124)
+  - `vep-plugin-pairs` reads a span of a score table that starts at or below zero from the sequence's first position, as `tabix` reads it. (#124)
+  - The comparison class `stop_codon_overlap_insertion_range` reads a pure insertion from the input records where the comparison is given them, and leaves bases a record replaces under an identifier. (#124)
+  - The comparison class `hgvs_added_bases_written_outside_the_transcript` counts the bases a record adds from its alleles in every output format that carries them, in `vep-formats-compare` and `vep-plugin-pairs`. (#124)
+  - The comparison class `hgvs_insertion_left_where_the_shift_stops` counts a duplication's copy less the introns between its coordinates where `--json-cache` names the candidate's cache, in `vep-formats-compare` and `vep-plugin-pairs`. (#124)
+  - `vep-formats-compare --help` and its README state that a REVEL or SpliceAI score table is read under its `.tbi` index, the one vep-rs demands of the table. (#124)
+  - The `vep-outputs-compare` README states that the adjusted precision, recall and F1 read 0 where every tuple is set aside. (#124)
+  - `vep-golden-corpus classify --flag-set` runs on a flag set whose input is a file of region lines, naming each record by its line, and a refusal there prints no allele. (#124)
+  - The exit-status section of the compatibility page names the three refusals whose message carries a second line, and the `--tmpdir` row and help text say the flag places no file. (#124)
+  - The `VEP_FASTA_STORAGE` row lists every spelling read and the files the variable holds for, and the checksum page says that a cache converted by `tools/vep-storable-to-json` carries no manifest. (#124)
+  - The page of `plugin_cols_names_matched_exactly` cites `OpenTargets.pm` lines 218-224 and 219 and `TranscriptAnnotator.pm` line 200 for the statements it names; a test holds the citations. (#124)
+  - `vep-formats-compare` under `order_only` accepts two JSON `domains` arrays that one `DOMAINS` list gives in two orders, where it reported an object repeated for another entry as a difference. (#124)
+  - `vep-parquet-to-tab --canonical` and the Parquet comparison of `vep-formats-compare` keep a cell of an INT32-named column that is no INT32 as written, where they printed `-`, the text of NULL. (#124)
+  - `vep-parquet-to-tab --canonical` and the Parquet comparison of `vep-formats-compare` read a column a Parquet output stores as strings as stored, on both sides, where they reprinted it by its name. (#124)
+  - The page of `plugin_cols_names_matched_exactly` describes the fixed-name test of `TranscriptAnnotator.pm` line 115 as the case-insensitive prefix test it is, which vep-rs makes too; tests hold the sentence and the check. (#124)
+  - The `vep recode` page names `output` among the components of its errors and counts a value outside an option's list among the syntax errors. (#124)
+  - `vep-formats-compare` sets aside the reference `Amino_acids` and the `protein_altering_variant` term beside the Codons of `refseq_edited_model_deleted_span_codons`, and the entry's page documents both with two ClinVar rows. (#124)
+  - The format comparator sets aside the reference `Codons` and `Amino_acids` of an insertion on bases an edited RefSeq model holds and the genome lacks, under `refseq_edited_model_inserted_span_codons`, read from `--json-cache`. (#124)
+  - `vep-formats-compare` sets aside, under `refseq_edited_model_hgvsc_offset`, the HGVSc of a deletion across the bases a RefSeq model's alignment deleted, whose span Ensembl VEP closes later by those bases. (#124)
+  - The page of `refseq_edited_model_hgvsc_offset` works `rs1179352929` through (`docs/divergences/refseq-edited-model-hgvsc.md`). (#124)
+  - `vep-plugin-pairs compare` counts two `5UTR_annotation` values as a match where they hold the same groups of the same pairs in another order, as Ensembl VEP's UTRAnnotator writes them. (#124)
+  - The class table of `vep-outputs-compare` and `vep-sv-compare` reports cites each Ensembl VEP block to its closing brace, and one statement of `OutputFactory.pm` by its sub. (#124)
+  - `vep-formats-compare --json-cache` reads a coding sequence that ends inside a codon for `hgvsp_stop_named_on_incomplete_coding_sequence`, so a frameshift row of a transcript no flag marks incomplete reads under the class. (#124)
+  - `vep-formats-compare` reads `SHIFT_LENGTH` and the three position fields of an indel near a sequence edge under `hgvs_shift_sequence_edge_window`, where each engine's value is its own walk's. (#124)
+  - `vep-formats-compare` sets aside under `colocated_list_cut_at_cache_cap` a JSON `var_synonyms` list whose cut piece Ensembl VEP prints as a number without its closing point; the list, rebuilt one byte short, was reported. (#124)
+  - `scripts/concordance/feature_oracle.sh` compares the warnings files of the one format a case names beside `warnings` without `default`, so `json,warnings` reads the JSON runs' warnings. (#124)
+  - `feature_oracle.sh` keeps its column names under a variable bash does not set, so a real run started in a terminal passes the header check where it read the terminal's width. (#124)
+  - The reproduction of `refseq_edited_model_intron_span_coding_reference` compares the `Amino_acids` and `Codons` cells of both engines beside the terms, the positions and `HGVSp`, and its page names them; a test holds both. (#124)
+  - `vep-parquet-to-tab` prints a tab column named as a key column (a plugin's `ref` or `alt`) from its own field, where it printed the key column's cell and shifted the row. (#124)
+  - The custom annotation page says where a row lists the `...` marker of `num_records` and counts the repeat of `custom_exact_source_allele_record_accumulation` by the rows of the record's own allele. (#124)
+  - The entry `custom_exact_source_allele_record_accumulation` stands at tier 2, since an ordinary record of several alternates reaches it under a `num_records` below its matches. (#124)
+  - The Polars recipe of the Parquet page sorts by `contig_index` before it selects its columns; with the select first Polars ended it with `ColumnNotFoundError`. (#124)
+  - `vep-formats-compare --format parquet` reads both outputs through its stream of record groups and holds 0.7 GiB on 136.6 million rows, where it held about 5.5 GiB a million rows. (#124)
+  - `docs/divergences/skipped-variants-file-header.md` says the fields re-joined with tabs under `--delimiter` are a VCF line's, and that an Ensembl-format line is quoted as read, as Ensembl VEP quotes it. (#124)
+  - The comparison runner accepts a compressed FASTA indexed as `<name>.fa.gz.fai`, the name `samtools faidx` gives the index, beside the `<name>.fa.fai` spelling. (#124)
+  - The comparison runner reads a candidate pin as text: candidates pinned `1` and `1.0` each keep their own status row, where both took both rows. (#124)
+  - `vep-sv-compare` sets aside the `<CNV:TR>` pair of a loss that a run without a FASTA reads as a gain, `feature_elongation` beside the reference's deletion. (#124)
+  - The entry `custom_exact_source_allele_record_accumulation` documents a second shape in `docs/custom-annotation.md`: an `exact` record under a short name that spells `ZYG`, `NEAREST` or `SV`, which Ensembl VEP repeats once for each row. (#124)
+  - `vep-sv-compare` sets aside a `<CNV:TR>` record's symbolic `splice_polypyrimidine_tract_variant` where the cache shows that the run overlaps an intron's tract and no exon and the literal reading's span overlaps no tract. (#124)
+  - `docs/intended-divergences.md` names every comparison that sets an entry's rows aside under its name: the SNP/indel, structural-variant and statistics comparators and the plugin tuple scorer join the three it listed. (#124)
+  - The format comparator's class `gxf_reverse_strand_utr_sequence` reads a row only where its `SOURCE` in the reference names a GTF or GFF file, so a cache transcript's stop count stays a difference. (#124)
+  - `vep-formats-compare` reads `GIVEN_REF` for the spliced allele of `refseq_edited_model_deleted_span_codons` where `--hgvs` leaves a shifted deletion's bases in `USED_REF`, so the class takes those rows' Codons and Amino_acids. (#124)
+  - `docs/cache-setup.md` and the cache builder's README state that a native cache holds the release's `protein_feature` rows once, so `DOMAINS` can name other features than Ensembl's cache. (#124)
+  - The `prepare` step of the `contig_absent_from_fasta` reproduction reads its pipe to the end, where it ended with exit code 141 at times; a test holds every committed step to that. (#124)
+  - The reproduction of `bgzf_block_overstated_isize` compares the rows each engine writes; it held Ensembl VEP to two gzip error lines, which gzip prints once or twice, and could read `changed`. (#124)
+  - The page of `refseq_edited_model_hgvsc_offset` names its Ensembl model in the opening paragraph, states the comparison's count test and gives the corpus tool's verdict on section 3's rows. (#124)
+  - The page of `hgvs_shift_sequence_edge_window` counts its eight ClinVar records under the shift flags among the 14 near a sequence end, and defines a slice, a walk and a corpus. (#124)
+  - `docs/divergences/phylop-short-name.md` and the help of `--ucsc_data_root` give `--phastCons` its own file under `phastCons<N>way`, where each gave the `phyloP<N>way` path for both shortcuts. (#124)
+  - `docs/divergences/hgvsp-stop-codon-protein-comparison.md` says that any Ensembl VEP value stays a difference where vep-rs writes no `HGVSp`, and that the type is read from the codon window's peptides. (#124)
+  - The page of `colocated_list_cut_at_cache_cap` says which separator starts a stored stretch, what a `%3B` counts as, and which id a JSON pair or a row may lack. (#124)
+  - The page of `refseq_edited_model_seam_insertion_hgvsc` says that its 114 rows are those written on the added bases and lists the mapper pair behind the two cDNA numbers of section 2.4. (#124)
+  - The page of `hgvs_insertion_left_where_the_shift_stops` gives the 3' shift's bound on both strands: an allele of 1,001 bases on a reverse-strand transcript is not moved; a test holds the sentence. (#124)
+  - `docs/output/json.md` lists `minor_allele` and `minor_allele_freq` among the columns a `colocated_variants` object carries from a cache whose `variation_cols` declare them. (#124)
+  - `docs/cache-setup.md` and the cache builder's README state that a cache Ensembl publishes can name a protein feature's analysis by another label than a native cache writes in `DOMAINS`. (#124)
+  - `docs/divergences/defect-c.md` says where Ensembl VEP writes a `<CNV:TR>` record: at another Location only with a FASTA and a trimmed expansion, at the run or not at all otherwise. (#124)
+  - `scripts/concordance/README.md` says that `discordant.tsv` holds one row for each tuple one output alone holds, and that `summary.json` counts tuples. (#124)
+  - `docs/cli/compatibility.md` cites `Config.pm:934-937`, the block that forces quiet for an output named `stdout`, where it cited the comment line above it. (#124)
+  - `--exclude_predicted`: its help says the filter reads every transcript, so it also drops predicted models of an Ensembl cache named by RefSeq accession and of a GTF or GFF3. (#124)
+  - `--delimiter`: its help names every kind of value the run refuses, an empty value, a zero-width assertion, a look-around and a class over characters outside ASCII among them. (#124)
+  - `docs/cache-conversion.md` says that a cache built with `--core-dumps` carries each translation's sequence edits, and that a build without the dumps writes an empty list. (#124)
+  - `docs/cache-conversion.md` names the stop-codon readthrough edit among the sequence edits a conversion carries. (#124)
+  - `docs/cache-from-gtf-or-gff3.md` says that a RefSeq GFF3 holds the mature miRNA arms in a record neither engine reads, where it had no GFF3 carry them. (#124)
+  - `crates/vep-fasta/README.md` names each use the crate makes of `tracing`: two reports of a block that does not inflate, a debug line and a warning; the crate made one in 0.6.0. (#124)
+  - `docs/cli/compatibility.md` limits two claims: Ensembl VEP reads a value's first letter for `--sift` and `--polyphen` alone, and leaves a column out for a false `--sift`, `--polyphen` or `--nearest` alone. (#124)
+  - `--tmpdir`: its help and its row name the FATHMM plugin, which vep-rs does not port, as the one Ensembl VEP module that reads the flag. (#124)
+  - `docs/cli/compatibility.md` says that a flag accepted without effect changes no annotation, and `tests/parity/README.md` that a run records such a flag in its command line. (#124)
+  - `docs/divergences/gxf-malformed-coordinate-line-refused.md` counts 28,494 feature lines in the committed GTF and GFF files, where it gave that figure as the count of their lines. (#124)
+  - `--transcript_filter`: its help says that the filter grammar drops a `^` and what stands before it in a word, so `^X._` reads as `X._`. (#124)
+  - `--transcript_filter`: its help says a pattern is read as Perl reads it, and that a back-reference or another construct the `regex` crate cannot express is an error. (#124)
+  - `tests/parity/README.md` and the parity-row recipe say that a flag accepted without effect leaves the output the same apart from the header lines recording the command line and the run's time. (#124)
+  - `docs/getting-started/coming-from-ensembl-vep.md` names the three flags accepted without effect that Ensembl VEP reads and the one its FATHMM plugin reads; `tests/parity/README.md` likens to Ensembl VEP only flags it reads nothing from. (#124)
+  - `docs/custom-annotation.md` says a VCF source matches a record with an `SVTYPE` by span only where its ALT is not bases alone, and every record against a structural input record. (#124)
+  - The page of `duplicate_output_column_collapsed` and its index row say Ensembl VEP's tab and VCF writers append every `--custom` key, a source's field key such as `gnomADg_AF` under `--af_gnomadg` among them. (#124)
+  - In 0.6.0 that page and row named the short name alone. (#124)
+  - `docs/cache-setup.md` names the component of a cache-resolution error: `config` for an unreadable `--synonyms` file, `custom` where a run with a GFF or GTF transcript source has no cache, `cache` otherwise. (#124)
+  - `docs/cache-setup.md` states that on a contig the FASTA lacks vep-rs reads an insertion's HGVSc, and the HGVSp of an allele the 3' shift moves, where the record writes it. (#124)
+  - `docs/cache-setup.md` says that an installation keeps a `dna/` genome FASTA that is already BGZF and recompresses only one that is not, then indexes it. (#124)
+  - `docs/intended-divergences.md` does not set mask classes apart from the nineteen concordance classes: `splice_family_swap`, `start_cooccurrence_swap`, `reference_skipped_record` and `bnd_own_chromosome_rows_lost` are both. (#124)
+  - The entry `merged_same_stable_id_collapse` and its index row name the copy Ensembl VEP keeps of a stable identifier a buffer loads twice: the first-listed `ensembl`-sourced copy, else the lowest `dbID`. (#124)
+  - The index row of `transcript_filter_abbreviated_fields` says vep-rs refuses a pattern the `regex` crate cannot express; in 0.6.0 it named every pattern outside the crate's dialect. (#124)
+  - The workspace's tests pass on a file system that folds case or refuses a file name outside UTF-8, leaving out the assertions and runs that need such names. (#124)
+  - `run_clone_measurement.sh` and `run_concordance.sh` name the vep-rs run's converted cache to `vep-outputs-compare` (`--json-cache`), so a report sets aside the pairs of the classes that read a transcript's coding ends. (#124)
+  - The comparison rule of `splice_term_past_the_record_span` in `vep-outputs-compare`, `vep-formats-compare` and `vep-plugin-pairs` takes a row on which vep-rs alone writes `splice_donor_variant` or `splice_acceptor_variant` for an insertion written after one kept reference base that is an intron of one base, the term both engines write for the same insertion written as a record of one alternate allele. (#124)
+  - `scripts/docs/render_release_figure.py` draws Ensembl VEP's concordance at the release record's version and its wall time at the timing records' where they differ; its texts and the home page name both. (#124)
 
 - Transcript attributes, predictions and consequences
-  - `--regulatory_gff` reads every record of its files before the output file and the statistics report are created, so a record it refuses ends the run with neither file written.
-  - A one-base `<INS:ME>` on the first or last two bases of an intron of a transcript without a translation is `non_coding_transcript_variant`, as Ensembl VEP writes it, not `intergenic_variant`.
-  - A structural variant on a `nonsense_mediated_decay` transcript without a translation takes `non_coding_transcript_variant` beside `NMD_transcript_variant`, as Ensembl VEP writes it, unless it overlaps an exon.
-  - A transcript whose exons overlap or abut has no intron between them, as in Ensembl VEP: a variant there takes no splice, tract, intron or frameshift-intron reading from the gap.
-  - A transcript an Ensembl cache stores across the origin of a circular sequence is annotated on both sides of the origin, its coding positions counted from its first base.
-  - `--regulatory_gff` refuses a line that opens with a tab, naming the type that stands where a start is read, as `vep-cache-builder` refuses it; Ensembl VEP drops the record silently.
-  - `--regulatory_gff` refuses a line whose NUL byte puts other text where `tabix` reads its start or end, as `vep-cache-builder --regulatory-gff` does; Ensembl VEP writes no row for the record.
-  - `vep_effects::regulatory::motif_score_delta` returns no score, in place of a change of zero, for an allele with no base inside the motif's sequence.
-  - A one-base substitution on a residue a translation edit removes, as on a stop triplet a RefSeq model reads through, is `coding_sequence_variant`, as in Ensembl VEP, not `stop_lost`.
-  - An insertion allele written after shared leading bases in a multi-allelic record gets the splice and intron terms of the same insertion written minimally.
-  - `--hgvs` writes no HGVSp naming the stop alone on a coding sequence that no stop codon closes; Ensembl VEP names a stop there (`hgvsp_stop_named_on_incomplete_coding_sequence`).
-  - A variant inside a transcript's span but in none of its exons or introns, as in a trans-spliced organelle gene, gets the transcript's `intergenic_variant` row, as in Ensembl VEP.
-  - `--hgvs` writes the HGVSp of an insertion or deletion shifted from an intron into a `cds_start_NF` transcript's coding sequence that ends on its stop codon; Ensembl VEP writes none (`hgvsp_shifted_indel_written_span_gate`).
-  - `--hgvs` writes the HGVSp of an insertion or deletion shifted from an intron into a coding sequence not ending on its stop codon, wherever its whole codons give it (`hgvsp_shifted_indel_written_span_gate`).
-  - `--hgvs` leaves the HGVSp empty, as Ensembl VEP does, for an indel shifted from an intron into a coding sequence ending inside a codon, where no whole codon differs (`hgvsp_shifted_indel_written_span_gate`).
-  - An alternate allele with unknown bases after known bases that settle a stop codon gets `stop_gained`, its `Amino_acids` and, under `--hgvs`, its HGVSp; Ensembl VEP translates no such allele.
-  - A `<CNV:TR>` allele read symbolically whose record states fewer bases than its run names `feature_truncation`, where Ensembl VEP 116.3 names `feature_elongation`; the intended divergence `cnv_tr_symbolic_loss_named_a_gain` documents it in `docs/divergences/cnv-tr-symbolic-loss-named-a-gain.md`.
-  - A `<CNV:TR>` allele read symbolically whose record states exactly its run's length names no direction term, where Ensembl VEP 116.3 names `feature_elongation` with IMPACT HIGH (`cnv_tr_symbolic_loss_named_a_gain`, `docs/divergences/cnv-tr-symbolic-loss-named-a-gain.md`).
-  - An insertion whose known bases keep the stop codon before its unknown bases gets `inframe_insertion` beside `stop_retained_variant`, `Amino_acids` and, under `--hgvs`, HGVSp; Ensembl VEP translates no such allele (`stop_codon_settled_before_unknown_bases`).
-  - A deletion removing the start codon whole, with any whole codons after it, on a transcript without a 5' UTR gets `start_lost` beside `inframe_deletion`; Ensembl VEP writes `inframe_deletion` alone (`start_codon_removed_without_five_prime_utr`).
-  - The row keeps `inframe_deletion` alone where a methionine codon stands at the start of the coding sequence after such a deletion.
-  - An insertion or deletion at a coding end that shows no stop codon takes no `stop_lost` or `stop_retained_variant`; Ensembl VEP reads the last three coding positions as one (`stop_codon_overlap_without_stop_codon`).
-  - A change at the first three coding positions of a transcript whose record shows no start codon takes no `start_lost` or `start_retained_variant`; Ensembl VEP writes them there (`start_codon_overlap_without_start_codon`).
-  - A change in a stop codon that the poly(A) tail completes reads `stop_lost` or `stop_retained_variant` on a transcript whose record shows the model complete; Ensembl VEP writes `incomplete_terminal_codon_variant` (`stop_codon_completed_by_polyadenylation`).
-  - A structural deletion over a coding end where no stop codon stands, by `cds_end_NF` or by the coding sequence, is not `stop_lost`; Ensembl VEP writes the term there (`structural_deletion_stop_lost_without_stop_codon`).
-  - A change that keeps every residue and brings a stop codon behind the last one, where the record shows no stop codon, is `stop_gained`; Ensembl VEP writes `stop_retained_variant` (`stop_codon_behind_last_residue_without_stop_codon`).
-  - A span that runs over the end of a coding sequence on which no stop codon stands is written without `stop_lost`.
-  - A stop codon's terms are written only where the transcript's record shows a stop codon at the coding end.
-  - A span that removes the genome's bases of a stop codon which a sequence edit completes on an edited RefSeq model is written `stop_lost`.
-  - A frameshift-length insertion or deletion that begins inside a stop codon the protein reads on past gets `frameshift_variant` and, under `--hgvs`, the first changed residue (`frameshift_inside_a_held_stop_codon`).
-  - An insertion with unknown bases written in an intron gets, under `--hgvs`, its HGVSp and `HGVS_OFFSET` where its known bases settle a stop codon at its most 3' placement (`stop_codon_settled_before_unknown_bases`).
-  - An insertion or deletion that overlaps the start codon of a transcript with no 5' UTR and leaves a start codon in place gets `start_retained_variant` in place of `start_lost`.
-  - The IMPACT and, under `--hgvs`, the HGVSp of such a row follow that term; Ensembl VEP makes its kept-start test only behind a 5' UTR.
-  - `--hgvs` names a frameshift that the transcript's last base cuts short by its first residue and `fs`, where Ensembl VEP writes a deletion with an extension (`stop_codon_overlap_without_stop_codon`).
+  - `--regulatory_gff` reads every record of its files before the output file and the statistics report are created, so a record it refuses ends the run with neither file written. (#124)
+  - A one-base `<INS:ME>` on the first or last two bases of an intron of a transcript without a translation is `non_coding_transcript_variant`, as Ensembl VEP writes it, not `intergenic_variant`. (#124)
+  - A structural variant on a `nonsense_mediated_decay` transcript without a translation takes `non_coding_transcript_variant` beside `NMD_transcript_variant`, as Ensembl VEP writes it, unless it overlaps an exon. (#124)
+  - A transcript whose exons overlap or abut has no intron between them, as in Ensembl VEP: a variant there takes no splice, tract, intron or frameshift-intron reading from the gap. (#124)
+  - A transcript an Ensembl cache stores across the origin of a circular sequence is annotated on both sides of the origin, its coding positions counted from its first base. (#124)
+  - `--regulatory_gff` refuses a line that opens with a tab, naming the type that stands where a start is read, as `vep-cache-builder` refuses it; Ensembl VEP drops the record silently. (#124)
+  - `--regulatory_gff` refuses a line whose NUL byte puts other text where `tabix` reads its start or end, as `vep-cache-builder --regulatory-gff` does; Ensembl VEP writes no row for the record. (#124)
+  - `vep_effects::regulatory::motif_score_delta` returns no score, in place of a change of zero, for an allele with no base inside the motif's sequence. (#124)
+  - A one-base substitution on a residue a translation edit removes, as on a stop triplet a RefSeq model reads through, is `coding_sequence_variant`, as in Ensembl VEP, not `stop_lost`. (#124)
+  - An insertion allele written after shared leading bases in a multi-allelic record gets the splice and intron terms of the same insertion written minimally. (#124)
+  - `--hgvs` writes no HGVSp naming the stop alone on a coding sequence that no stop codon closes; Ensembl VEP names a stop there (`hgvsp_stop_named_on_incomplete_coding_sequence`). (#124)
+  - A variant inside a transcript's span but in none of its exons or introns, as in a trans-spliced organelle gene, gets the transcript's `intergenic_variant` row, as in Ensembl VEP. (#124)
+  - `--hgvs` writes the HGVSp of an insertion or deletion shifted from an intron into a `cds_start_NF` transcript's coding sequence that ends on its stop codon; Ensembl VEP writes none (`hgvsp_shifted_indel_written_span_gate`). (#124)
+  - `--hgvs` writes the HGVSp of an insertion or deletion shifted from an intron into a coding sequence not ending on its stop codon, wherever its whole codons give it (`hgvsp_shifted_indel_written_span_gate`). (#124)
+  - `--hgvs` leaves the HGVSp empty, as Ensembl VEP does, for an indel shifted from an intron into a coding sequence ending inside a codon, where no whole codon differs (`hgvsp_shifted_indel_written_span_gate`). (#124)
+  - An alternate allele with unknown bases after known bases that settle a stop codon gets `stop_gained`, its `Amino_acids` and, under `--hgvs`, its HGVSp; Ensembl VEP translates no such allele. (#124)
+  - A `<CNV:TR>` allele read symbolically whose record states fewer bases than its run names `feature_truncation`, where Ensembl VEP 116.3 names `feature_elongation`; the intended divergence `cnv_tr_symbolic_loss_named_a_gain` documents it in `docs/divergences/cnv-tr-symbolic-loss-named-a-gain.md`. (#124)
+  - A `<CNV:TR>` allele read symbolically whose record states exactly its run's length names no direction term, where Ensembl VEP 116.3 names `feature_elongation` with IMPACT HIGH (`cnv_tr_symbolic_loss_named_a_gain`, `docs/divergences/cnv-tr-symbolic-loss-named-a-gain.md`). (#124)
+  - An insertion whose known bases keep the stop codon before its unknown bases gets `inframe_insertion` beside `stop_retained_variant`, `Amino_acids` and, under `--hgvs`, HGVSp; Ensembl VEP translates no such allele (`stop_codon_settled_before_unknown_bases`). (#124)
+  - A deletion removing the start codon whole, with any whole codons after it, on a transcript without a 5' UTR gets `start_lost` beside `inframe_deletion`; Ensembl VEP writes `inframe_deletion` alone (`start_codon_removed_without_five_prime_utr`). (#124)
+  - The row keeps `inframe_deletion` alone where a methionine codon stands at the start of the coding sequence after such a deletion. (#124)
+  - An insertion or deletion at a coding end that shows no stop codon takes no `stop_lost` or `stop_retained_variant`; Ensembl VEP reads the last three coding positions as one (`stop_codon_overlap_without_stop_codon`). (#124)
+  - A change at the first three coding positions of a transcript whose record shows no start codon takes no `start_lost` or `start_retained_variant`; Ensembl VEP writes them there (`start_codon_overlap_without_start_codon`). (#124)
+  - A change in a stop codon that the poly(A) tail completes reads `stop_lost` or `stop_retained_variant` on a transcript whose record shows the model complete; Ensembl VEP writes `incomplete_terminal_codon_variant` (`stop_codon_completed_by_polyadenylation`). (#124)
+  - A structural deletion over a coding end where no stop codon stands, by `cds_end_NF` or by the coding sequence, is not `stop_lost`; Ensembl VEP writes the term there (`structural_deletion_stop_lost_without_stop_codon`). (#124)
+  - A change that keeps every residue and brings a stop codon behind the last one, where the record shows no stop codon, is `stop_gained`; Ensembl VEP writes `stop_retained_variant` (`stop_codon_behind_last_residue_without_stop_codon`). (#124)
+  - A span that runs over the end of a coding sequence on which no stop codon stands is written without `stop_lost`. (#124)
+  - A stop codon's terms are written only where the transcript's record shows a stop codon at the coding end. (#124)
+  - A span that removes the genome's bases of a stop codon which a sequence edit completes on an edited RefSeq model is written `stop_lost`. (#124)
+  - A frameshift-length insertion or deletion that begins inside a stop codon the protein reads on past gets `frameshift_variant` and, under `--hgvs`, the first changed residue (`frameshift_inside_a_held_stop_codon`). (#124)
+  - An insertion with unknown bases written in an intron gets, under `--hgvs`, its HGVSp and `HGVS_OFFSET` where its known bases settle a stop codon at its most 3' placement (`stop_codon_settled_before_unknown_bases`). (#124)
+  - An insertion or deletion that overlaps the start codon of a transcript with no 5' UTR and leaves a start codon in place gets `start_retained_variant` in place of `start_lost`. (#124)
+  - The IMPACT and, under `--hgvs`, the HGVSp of such a row follow that term; Ensembl VEP makes its kept-start test only behind a 5' UTR. (#124)
+  - `--hgvs` names a frameshift that the transcript's last base cuts short by its first residue and `fs`, where Ensembl VEP writes a deletion with an extension (`stop_codon_overlap_without_stop_codon`). (#124)
 
 - Command line, configuration and errors
-  - A panic inside a streaming task ends the run with an error naming it where the build unwinds, never with the writer and the coordinator waiting on each other.
-  - A panic inside a pool task of a batched run ends the run with the error `pipeline task panicked: <text>` where the build unwinds, as in a streaming run.
-  - `vep filter`, `vep recode`, `vep-cache-builder` and `vep-cache-converter` keep their run and exit status when standard error refuses a write, and a built-in plugin's own line is dropped there.
-  - The Parquet order refusal names an Ensembl-format record by its line of the input, as the run's skip warnings count lines; it named the record's count among the records read.
-  - `vep`'s status lines and `bench_plugins`' log lines carry colour codes only on a terminal with `NO_COLOR` unset or empty; a file or a pipe takes plain text.
-  - `vep`'s status lines and its refusal of an unreadable transcript shard name a chromosome as `chromosome <name>`, spelled as the cache spells it, with no `chr` before it.
-  - The `--assembly` help lists the six names, in any letter case, that give built-in plugins their assembly hint; it named four and promised a warning under `37` and `38`.
-  - `--sereal`'s help says that vep-rs reads a cache's JSON shards whatever serialiser its metadata names.
-  - `vep filter` and `vep recode` refuse a name that is a prefix of two options after one dash as after two (exit 2); its letters were read as short forms.
-  - The compatibility page's exit-status table names all that an `ERROR: [cli]` line reports, adding a bare `--`, a refused `--regulatory_gff` value or file and a `--cell_type` name the cache lacks.
-  - The compatibility page's exit-status table names the statistics report among what an `ERROR: [output]` line reports: a report file that exists without `--force_overwrite` or that cannot be written.
-  - The compatibility page's exit-status table names every fault the `input`, `parquet`, `plugin`, `cache`, `fasta`, `filter`, `check_svs`, `custom`, `config` and `run` components of an `ERROR:` line report.
-  - `vep recode` refuses a `--format`, `--pick_order` or `--shift_hgvs` value outside its list as a syntax error, exit 2 with the list, where it ended with exit 1 and several lines.
-  - `vep recode` reads a value that begins with a hyphen, a `--transcript_filter` or an input given after `=`, as its option's value, where the run was refused.
-  - An `ERROR:` line, a warning's echo, a status line and the summary line each open a line of their own on standard error after a `Processed N variants...` progress line.
-  - `--phyloP` or `--phastCons` under a remote `--ucsc_data_root` is refused in a line naming each shortcut given and the layout of the file it reads.
+  - A panic inside a streaming task ends the run with an error naming it where the build unwinds, never with the writer and the coordinator waiting on each other. (#124)
+  - A panic inside a pool task of a batched run ends the run with the error `pipeline task panicked: <text>` where the build unwinds, as in a streaming run. (#124)
+  - `vep filter`, `vep recode`, `vep-cache-builder` and `vep-cache-converter` keep their run and exit status when standard error refuses a write, and a built-in plugin's own line is dropped there. (#124)
+  - The Parquet order refusal names an Ensembl-format record by its line of the input, as the run's skip warnings count lines; it named the record's count among the records read. (#124)
+  - `vep`'s status lines and `bench_plugins`' log lines carry colour codes only on a terminal with `NO_COLOR` unset or empty; a file or a pipe takes plain text. (#124)
+  - `vep`'s status lines and its refusal of an unreadable transcript shard name a chromosome as `chromosome <name>`, spelled as the cache spells it, with no `chr` before it. (#124)
+  - The `--assembly` help lists the six names, in any letter case, that give built-in plugins their assembly hint; it named four and promised a warning under `37` and `38`. (#124)
+  - `--sereal`'s help says that vep-rs reads a cache's JSON shards whatever serialiser its metadata names. (#124)
+  - `vep filter` and `vep recode` refuse a name that is a prefix of two options after one dash as after two (exit 2); its letters were read as short forms. (#124)
+  - The compatibility page's exit-status table names all that an `ERROR: [cli]` line reports, adding a bare `--`, a refused `--regulatory_gff` value or file and a `--cell_type` name the cache lacks. (#124)
+  - The compatibility page's exit-status table names the statistics report among what an `ERROR: [output]` line reports: a report file that exists without `--force_overwrite` or that cannot be written. (#124)
+  - The compatibility page's exit-status table names every fault the `input`, `parquet`, `plugin`, `cache`, `fasta`, `filter`, `check_svs`, `custom`, `config` and `run` components of an `ERROR:` line report. (#124)
+  - `vep recode` refuses a `--format`, `--pick_order` or `--shift_hgvs` value outside its list as a syntax error, exit 2 with the list, where it ended with exit 1 and several lines. (#124)
+  - `vep recode` reads a value that begins with a hyphen, a `--transcript_filter` or an input given after `=`, as its option's value, where the run was refused. (#124)
+  - An `ERROR:` line, a warning's echo, a status line and the summary line each open a line of their own on standard error after a `Processed N variants...` progress line. (#124)
+  - `--phyloP` or `--phastCons` under a remote `--ucsc_data_root` is refused in a line naming each shortcut given and the layout of the file it reads. (#124)
 
 - Input formats and records
-  - A bi-allelic VCF record with a `-` inside an allele keeps its written alleles and span, as Ensembl VEP reads it.
-  - An empty VCF `REF` column beside one `ALT` reads as Ensembl VEP reads it: `allele_string` opens with `/`, `VARIANT_CLASS` is `sequence_alteration`, `REF_ALLELE` is empty.
-  - An HGVS input line with an `r.` notation is skipped with the warning `HGVS type r not recognised`, as Ensembl VEP skips it, and the run reads on.
+  - A bi-allelic VCF record with a `-` inside an allele keeps its written alleles and span, as Ensembl VEP reads it. (#124)
+  - An empty VCF `REF` column beside one `ALT` reads as Ensembl VEP reads it: `allele_string` opens with `/`, `VARIANT_CLASS` is `sequence_alteration`, `REF_ALLELE` is empty. (#124)
+  - An HGVS input line with an `r.` notation is skipped with the warning `HGVS type r not recognised`, as Ensembl VEP skips it, and the run reads on. (#124)
 
 - Output formats, columns and headers
-  - `--minimal --check_frequency` writes a kept split allele that has no row (a `*`) as its own VCF line, JSON object and processed variant after a drop, as Ensembl VEP does.
-  - `--check_frequency` under `--minimal --no_check_alleles` judges a later allele equal to the reference by the frequency of a known insertion at its point, as Ensembl VEP does.
-  - `--stats_text` under `--process_ref_homs` counts no reference allele's row in `[Consequences (most severe)]`, as Ensembl VEP reads a record's alternate alleles alone.
-  - A Parquet column a plugin or a `--custom` source declares is a STRING whatever its name; a plugin's `TSL` column was INT32, each cell that was no integer NULL.
-  - A `--custom` key that spells a frequency column, such as `gnomADg_AF`, prints its source's values, then the flag's frequencies; the cell was empty or held the frequency alone.
-  - `--nearest` takes the lowest protein-coding start site at or above a record's first base as a candidate and names it where no candidate is nearer.
-  - Ensembl VEP names a site on a record's first base or one base above only where its search at or below the record's end returns it, the intended divergence `nearest_start_site_one_base_above`.
-  - `--total_length` with `--json` writes a position range's last position and its total under `cdna_end`, `cds_end` and `protein_end`, as in `"487/2674"`; the intended divergence `total_length_json_range_end` documents Ensembl VEP's value in `docs/divergences/total-length-json-range-end.md`.
-  - `Codons` and `Amino_acids` hold coding bases alone where a coding sequence ends inside a codon before a 3' UTR, or a deletion leaves under three coding bases.
-  - The alternate codon is cut from the alternate coding sequence, where Ensembl VEP reads bases of the UTR (`alternate_codon_past_the_coding_end`).
-  - A Parquet run with a statistics report, warnings file or skipped-variants file inside the output directory is refused by name before its input opens, not after every record is annotated.
-  - A `--custom` key spelling a flag column, such as `VARIANT_CLASS` or `MAX_AF`, prints its source's values wherever that field sets none; the cell was empty or held the field's value.
-  - A flag column that a plugin and a `--custom` source both declare prints the source's values on a row the plugin left unwritten.
-  - `--json` writes a key derived from a core field (`sift_score` under `--sift b`) with the core value beside a plugin column of that lower-cased name, as Ensembl VEP does.
-  - Parquet output stores a tab column named as a key column as `tab_<name>`, so no two columns share a name; a plugin's `ref` or `alt` stood beside the key column.
-  - `vep-parquet-to-tab` and `vep-formats-compare` print such a column under its tab name.
-  - The Parquet footer's `contig_order` lists a reference sequence the cache holds under a synonym or `chr` spelling once, under the cache's name; it added an entry no row ranked by.
-  - A `--custom` key that spells `IMPACT`, or `VARIANT_CLASS` under `--variant_class`, prints the field's value and then the source's values; the source's values were dropped.
-  - Under `--max_af`, a `--custom` key spelled `MAX_AF` lists its source's values and then the maximum frequency; the cell held the maximum alone.
-  - A JSON entry carries a plugin's column named as a record field, a co-located variant field, a frequency column or a `--custom` key only where the plugin wrote it.
-  - A `--custom` key spelling one of the thirteen columns of the default format, such as `Gene`, `Consequence` or `Existing_variation`, prints its source's values in that column as Ensembl VEP does.
-  - The cell of a column that a `--custom` key spells was empty or held the column's own value alone, and the default format listed the key under `Extra`.
-  - A Parquet output stores a tab column whose name an earlier column carries in other letters behind `tab_`, and its footer states the `--tab` column names under `tab_columns`.
-  - A `--custom` key that spells a statistic of a source prints the statistic and then the values of the source records that name the row's allele; those values were dropped.
-  - Ensembl VEP ends its run on a `--custom` key spelling a statistic (`S_count` beside a source `S` that asks for `count`), which the intended divergence `custom_key_named_as_a_plain_value_field` documents (`docs/divergences/custom-key-named-as-a-plain-value-field.md`, section 3).
-  - A `--custom` key that spells a list-valued flag field, such as `MANE` or `VAR_SYNONYMS`, prints its source's values with the field's list; the cell held the field's list alone.
-  - A Parquet output path written with a trailing separator (`out.parquet/`) names its default statistics report and warnings file beside the directory, as `out.parquet` does, so the run completes.
-  - A `--custom` key one source declares twice (`fields=count,summary_stats=count`) has one description line in tab and VCF headers, the statistic's text then the field's; the field's text named the file twice.
-  - One `--custom` source's record field and statistic of one name have a default-format line each; Ensembl VEP lists their key twice, which the intended divergence `custom_key_named_as_a_plain_value_field` documents (`docs/divergences/custom-key-named-as-a-plain-value-field.md`, section 3.6).
-  - A key two plugins, or a plugin and a `--custom` source, declare has one tab description line with each declaration's text; Ensembl VEP's carry the last alone (`duplicate_output_column_collapsed`, `docs/divergences/duplicate-output-column.md`).
-  - A Parquet run under `--force_overwrite` whose output path is a mount point is refused before its first record is read, where it annotated every record and then failed.
-  - `vep_io::output::parquet::UnpublishedOutput::create` fails with the error kind `ResourceBusy`, nothing made, on an output path it finds to be a mount point.
-  - A `--custom` key two sources of one short name declare apart, as a field and as a statistic (`fields=count`, `summary_stats=count`), is described by each declaration's text with its sources' files.
-  - The tab and VCF headers carry both texts on one line, the statistic's first, the default header on two; Ensembl VEP's carries the first text with the later file (`custom_repeated_short_name_header_lines`).
-  - A `--custom` key spelling `Uploaded_variation`, `Location` or `Allele` prints the column's value, then its source's values, where Ensembl VEP ends its run; the cell held the column's value alone.
-  - `--allele_number` numbers an alternate after a repeated allele, or after one equal to the reference, by its place in the record, as in 3 for the `T` of `C G,G,T`.
-  - The intended divergence `allele_number_repeated_or_reference_equal_alt` documents Ensembl VEP's count in `docs/divergences/allele-number-repeated-or-reference-equal-alt.md`.
+  - `--minimal --check_frequency` writes a kept split allele that has no row (a `*`) as its own VCF line, JSON object and processed variant after a drop, as Ensembl VEP does. (#124)
+  - `--check_frequency` under `--minimal --no_check_alleles` judges a later allele equal to the reference by the frequency of a known insertion at its point, as Ensembl VEP does. (#124)
+  - `--stats_text` under `--process_ref_homs` counts no reference allele's row in `[Consequences (most severe)]`, as Ensembl VEP reads a record's alternate alleles alone. (#124)
+  - A Parquet column a plugin or a `--custom` source declares is a STRING whatever its name; a plugin's `TSL` column was INT32, each cell that was no integer NULL. (#124)
+  - A `--custom` key that spells a frequency column, such as `gnomADg_AF`, prints its source's values, then the flag's frequencies; the cell was empty or held the frequency alone. (#124)
+  - `--nearest` takes the lowest protein-coding start site at or above a record's first base as a candidate and names it where no candidate is nearer. (#124)
+  - Ensembl VEP names a site on a record's first base or one base above only where its search at or below the record's end returns it, the intended divergence `nearest_start_site_one_base_above`. (#124)
+  - `--total_length` with `--json` writes a position range's last position and its total under `cdna_end`, `cds_end` and `protein_end`, as in `"487/2674"`; the intended divergence `total_length_json_range_end` documents Ensembl VEP's value in `docs/divergences/total-length-json-range-end.md`. (#124)
+  - `Codons` and `Amino_acids` hold coding bases alone where a coding sequence ends inside a codon before a 3' UTR, or a deletion leaves under three coding bases. (#124)
+  - The alternate codon is cut from the alternate coding sequence, where Ensembl VEP reads bases of the UTR (`alternate_codon_past_the_coding_end`). (#124)
+  - A Parquet run with a statistics report, warnings file or skipped-variants file inside the output directory is refused by name before its input opens, not after every record is annotated. (#124)
+  - A `--custom` key spelling a flag column, such as `VARIANT_CLASS` or `MAX_AF`, prints its source's values wherever that field sets none; the cell was empty or held the field's value. (#124)
+  - A flag column that a plugin and a `--custom` source both declare prints the source's values on a row the plugin left unwritten. (#124)
+  - `--json` writes a key derived from a core field (`sift_score` under `--sift b`) with the core value beside a plugin column of that lower-cased name, as Ensembl VEP does. (#124)
+  - Parquet output stores a tab column named as a key column as `tab_<name>`, so no two columns share a name; a plugin's `ref` or `alt` stood beside the key column. (#124)
+  - `vep-parquet-to-tab` and `vep-formats-compare` print such a column under its tab name. (#124)
+  - The Parquet footer's `contig_order` lists a reference sequence the cache holds under a synonym or `chr` spelling once, under the cache's name; it added an entry no row ranked by. (#124)
+  - A `--custom` key that spells `IMPACT`, or `VARIANT_CLASS` under `--variant_class`, prints the field's value and then the source's values; the source's values were dropped. (#124)
+  - Under `--max_af`, a `--custom` key spelled `MAX_AF` lists its source's values and then the maximum frequency; the cell held the maximum alone. (#124)
+  - A JSON entry carries a plugin's column named as a record field, a co-located variant field, a frequency column or a `--custom` key only where the plugin wrote it. (#124)
+  - A `--custom` key spelling one of the thirteen columns of the default format, such as `Gene`, `Consequence` or `Existing_variation`, prints its source's values in that column as Ensembl VEP does. (#124)
+  - The cell of a column that a `--custom` key spells was empty or held the column's own value alone, and the default format listed the key under `Extra`. (#124)
+  - A Parquet output stores a tab column whose name an earlier column carries in other letters behind `tab_`, and its footer states the `--tab` column names under `tab_columns`. (#124)
+  - A `--custom` key that spells a statistic of a source prints the statistic and then the values of the source records that name the row's allele; those values were dropped. (#124)
+  - Ensembl VEP ends its run on a `--custom` key spelling a statistic (`S_count` beside a source `S` that asks for `count`), which the intended divergence `custom_key_named_as_a_plain_value_field` documents (`docs/divergences/custom-key-named-as-a-plain-value-field.md`, section 3). (#124)
+  - A `--custom` key that spells a list-valued flag field, such as `MANE` or `VAR_SYNONYMS`, prints its source's values with the field's list; the cell held the field's list alone. (#124)
+  - A Parquet output path written with a trailing separator (`out.parquet/`) names its default statistics report and warnings file beside the directory, as `out.parquet` does, so the run completes. (#124)
+  - A `--custom` key one source declares twice (`fields=count,summary_stats=count`) has one description line in tab and VCF headers, the statistic's text then the field's; the field's text named the file twice. (#124)
+  - One `--custom` source's record field and statistic of one name have a default-format line each; Ensembl VEP lists their key twice, which the intended divergence `custom_key_named_as_a_plain_value_field` documents (`docs/divergences/custom-key-named-as-a-plain-value-field.md`, section 3.6). (#124)
+  - A key two plugins, or a plugin and a `--custom` source, declare has one tab description line with each declaration's text; Ensembl VEP's carry the last alone (`duplicate_output_column_collapsed`, `docs/divergences/duplicate-output-column.md`). (#124)
+  - A Parquet run under `--force_overwrite` whose output path is a mount point is refused before its first record is read, where it annotated every record and then failed. (#124)
+  - `vep_io::output::parquet::UnpublishedOutput::create` fails with the error kind `ResourceBusy`, nothing made, on an output path it finds to be a mount point. (#124)
+  - A `--custom` key two sources of one short name declare apart, as a field and as a statistic (`fields=count`, `summary_stats=count`), is described by each declaration's text with its sources' files. (#124)
+  - The tab and VCF headers carry both texts on one line, the statistic's first, the default header on two; Ensembl VEP's carries the first text with the later file (`custom_repeated_short_name_header_lines`). (#124)
+  - A `--custom` key spelling `Uploaded_variation`, `Location` or `Allele` prints the column's value, then its source's values, where Ensembl VEP ends its run; the cell held the column's value alone. (#124)
+  - `--allele_number` numbers an alternate after a repeated allele, or after one equal to the reference, by its place in the record, as in 3 for the `T` of `C G,G,T`. (#124)
+  - The intended divergence `allele_number_repeated_or_reference_equal_alt` documents Ensembl VEP's count in `docs/divergences/allele-number-repeated-or-reference-equal-alt.md`. (#124)
 
 - Warnings and skipped variants
-  - A text output that cannot be written leaves the warnings of every batch through the one whose write failed, in input order, in both pipeline modes at any worker count.
-  - An empty-line or skipped-line warning of the input reader is written with its batch, in input order, so a run that ends early names no line of a later batch.
-  - A run whose output is refused or cannot be written ends on the warnings file's error in both pipeline modes when its batch drew a warning it could not write.
-  - A refused Parquet run under `--pipeline_mode batched` leaves the warnings of the batches through the one that holds the refused record and none after it, as a streaming run does.
-  - A program embedding `vep-cli` that never configures the warning sink reads each warning once on standard error, where it was written twice; `vep --warning_file STDERR` keeps its two copies.
-  - The warning a RefSeq model's deleted bases draw is written with its record's warnings, in input order in both pipeline modes; it was written the moment its record was annotated.
-  - A run that ends early names no RefSeq model of a later batch in its deleted-bases warnings.
-  - A plugin's or a `--custom` source's warning is written with its record's other warnings, in input order, and a run that ends early leaves none of a later batch.
-  - A record under a name the synonyms give to two or more of the cache's chromosomes is skipped with a warning naming them, rather than annotated on the first listed.
-  - A `--parquet_partition chrom` run that skips the order check warns that a part closes at every change of chromosome spelling, not that parts are not rolled at contig boundaries.
-  - A run tests its statistics report, output, named `--warning_file` and skipped-variants file for writing before its first record, and one it cannot write is refused with nothing annotated or emptied.
-  - `vep recode` refuses a `--warning_file` it cannot write before it annotates, whether or not the input draws a warning.
-  - A variant inside a transcript's span but in none of its exons or introns, as in a trans-spliced organelle gene, draws no warning, as in Ensembl VEP.
+  - A text output that cannot be written leaves the warnings of every batch through the one whose write failed, in input order, in both pipeline modes at any worker count. (#124)
+  - An empty-line or skipped-line warning of the input reader is written with its batch, in input order, so a run that ends early names no line of a later batch. (#124)
+  - A run whose output is refused or cannot be written ends on the warnings file's error in both pipeline modes when its batch drew a warning it could not write. (#124)
+  - A refused Parquet run under `--pipeline_mode batched` leaves the warnings of the batches through the one that holds the refused record and none after it, as a streaming run does. (#124)
+  - A program embedding `vep-cli` that never configures the warning sink reads each warning once on standard error, where it was written twice; `vep --warning_file STDERR` keeps its two copies. (#124)
+  - The warning a RefSeq model's deleted bases draw is written with its record's warnings, in input order in both pipeline modes; it was written the moment its record was annotated. (#124)
+  - A run that ends early names no RefSeq model of a later batch in its deleted-bases warnings. (#124)
+  - A plugin's or a `--custom` source's warning is written with its record's other warnings, in input order, and a run that ends early leaves none of a later batch. (#124)
+  - A record under a name the synonyms give to two or more of the cache's chromosomes is skipped with a warning naming them, rather than annotated on the first listed. (#124)
+  - A `--parquet_partition chrom` run that skips the order check warns that a part closes at every change of chromosome spelling, not that parts are not rolled at contig boundaries. (#124)
+  - A run tests its statistics report, output, named `--warning_file` and skipped-variants file for writing before its first record, and one it cannot write is refused with nothing annotated or emptied. (#124)
+  - `vep recode` refuses a `--warning_file` it cannot write before it annotates, whether or not the input draws a warning. (#124)
+  - A variant inside a transcript's span but in none of its exons or introns, as in a trans-spliced organelle gene, draws no warning, as in Ensembl VEP. (#124)
 
 - Security and robustness
-  - Under `--hgvs`, an HGVSc description at a transcript's end on a long repeat reads the reference no farther past the transcript's ends than the allele's length.
-  - `convert-plugin-data` leaves the position past a row's end out of its verification where the table's index does not hold it, past 2^29 for a `.tbi`.
-  - `scripts/ci/admission.py` reads a `Co-Authored-By` value that holds a long run of blanks in linear time.
+  - Under `--hgvs`, an HGVSc description at a transcript's end on a long repeat reads the reference no farther past the transcript's ends than the allele's length. (#124)
+  - `convert-plugin-data` leaves the position past a row's end out of its verification where the table's index does not hold it, past 2^29 for a `.tbi`. (#124)
+  - `scripts/ci/admission.py` reads a `Co-Authored-By` value that holds a long run of blanks in linear time. (#124)
 
 - Co-located variants and frequencies
-  - A serialised known variant that lacks its `clin_sig` or `pubmed` key reads as one storing no such list instead of failing on the missing field.
+  - A serialised known variant that lacks its `clin_sig` or `pubmed` key reads as one storing no such list instead of failing on the missing field. (#124)
 
 - HGVS, SPDI and identifiers
-  - `vep recode --var_synonyms` takes the synonyms of the cache row spelled as the variant's name is, where another row's name differs from it in letter case alone.
-  - `--hgvs` writes the stop as unchanged for an insertion of whole codons inside the last residue's codon that keeps the protein, also where the record holds a shared base.
-  - On a RefSeq model edited to the genome, the `HGVSc` of an allele over the model's first or last base names the bases inside the transcript alone.
-  - `REFSEQ_OFFSET` is written on a row of an edited RefSeq model whose bases inside the transcript are unchanged while a base outside changes, as Ensembl VEP writes it.
-  - The `HGVSp` of an insertion whose placements run past Ensembl VEP's 3' shift bound is read at its last placement, where the `HGVSc` is described, under `--hgvs`.
-  - `--hgvs` writes the count to the new stop for a frameshift after a stop codon that the transcript's protein reads as a residue, such as a selenocysteine codon (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`).
-  - The count is written where that new stop is of other bases than the codon read as a residue; Ensembl VEP writes `fsTer?` there (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`).
-  - `--hgvs` writes the count to the new stop for a frameshift after a stop codon that the transcript's protein holds as a stop and reads on past (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`).
-  - A polymorphic pseudogene's protein holds such a stop; Ensembl VEP writes `fsTer?` there.
-  - Under `--hgvs`, the `HGVSc` of a RefSeq model with `BAM_EDIT=FAILED` counts each position along the genome's exons, so a coding position past the model's own edit is the RefSeq record's.
-  - `--hgvs` counts a lost stop's extension to the frame's next stop for a substitution on a transcript whose protein holds a stop, where Ensembl VEP writes `extTer?` (`hgvsp_stop_codon_protein_comparison`).
-  - `--hgvs` counts the extension after a deletion that takes a stop on a transcript whose protein holds a stop, where Ensembl VEP writes `delextTer?` (`hgvsp_stop_codon_protein_comparison`).
-  - `--hgvs` counts the extension of a frameshift whose first changed residue is a stop the protein holds, to the new frame's stop, where Ensembl VEP writes `extTer?` (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`).
-  - `--hgvs` writes no `HGVSp` for a frameshift that changes no residue the transcript holds, where Ensembl VEP names the last residue it compared at the next number (`hgvsp_frameshift_with_no_changed_residue`).
-  - `HGVSp` reads `p.Met1=` where an insertion or deletion at the start codon leaves the whole coding sequence standing behind a start codon the 5' UTR forms again.
-  - `--hgvs` counts the residues to the new stop codon for a frameshift named at residue 1 where no start codon stands; Ensembl VEP writes the unknown count there (`hgvsp_frameshift_count_at_the_first_residue`).
-  - `HGVSp` is written for an insertion or deletion written in the 5' UTR, or an intron of it, that the 3' shift carries into the coding sequence.
-  - `HGVSp` of an insertion or deletion the 3' shift moves into the first codon reads the start codon there: `p.Met1=` or the lost start, the intended divergence `hgvsp_shifted_indel_written_span_start_test` (`docs/divergences/hgvsp-shifted-indel-written-span-start-test.md`).
+  - `vep recode --var_synonyms` takes the synonyms of the cache row spelled as the variant's name is, where another row's name differs from it in letter case alone. (#124)
+  - `--hgvs` writes the stop as unchanged for an insertion of whole codons inside the last residue's codon that keeps the protein, also where the record holds a shared base. (#124)
+  - On a RefSeq model edited to the genome, the `HGVSc` of an allele over the model's first or last base names the bases inside the transcript alone. (#124)
+  - `REFSEQ_OFFSET` is written on a row of an edited RefSeq model whose bases inside the transcript are unchanged while a base outside changes, as Ensembl VEP writes it. (#124)
+  - The `HGVSp` of an insertion whose placements run past Ensembl VEP's 3' shift bound is read at its last placement, where the `HGVSc` is described, under `--hgvs`. (#124)
+  - `--hgvs` writes the count to the new stop for a frameshift after a stop codon that the transcript's protein reads as a residue, such as a selenocysteine codon (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`). (#124)
+  - The count is written where that new stop is of other bases than the codon read as a residue; Ensembl VEP writes `fsTer?` there (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`). (#124)
+  - `--hgvs` writes the count to the new stop for a frameshift after a stop codon that the transcript's protein holds as a stop and reads on past (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`). (#124)
+  - A polymorphic pseudogene's protein holds such a stop; Ensembl VEP writes `fsTer?` there. (#124)
+  - Under `--hgvs`, the `HGVSc` of a RefSeq model with `BAM_EDIT=FAILED` counts each position along the genome's exons, so a coding position past the model's own edit is the RefSeq record's. (#124)
+  - `--hgvs` counts a lost stop's extension to the frame's next stop for a substitution on a transcript whose protein holds a stop, where Ensembl VEP writes `extTer?` (`hgvsp_stop_codon_protein_comparison`). (#124)
+  - `--hgvs` counts the extension after a deletion that takes a stop on a transcript whose protein holds a stop, where Ensembl VEP writes `delextTer?` (`hgvsp_stop_codon_protein_comparison`). (#124)
+  - `--hgvs` counts the extension of a frameshift whose first changed residue is a stop the protein holds, to the new frame's stop, where Ensembl VEP writes `extTer?` (`hgvsp_frameshift_count_past_a_stop_read_as_a_residue`). (#124)
+  - `--hgvs` writes no `HGVSp` for a frameshift that changes no residue the transcript holds, where Ensembl VEP names the last residue it compared at the next number (`hgvsp_frameshift_with_no_changed_residue`). (#124)
+  - `HGVSp` reads `p.Met1=` where an insertion or deletion at the start codon leaves the whole coding sequence standing behind a start codon the 5' UTR forms again. (#124)
+  - `--hgvs` counts the residues to the new stop codon for a frameshift named at residue 1 where no start codon stands; Ensembl VEP writes the unknown count there (`hgvsp_frameshift_count_at_the_first_residue`). (#124)
+  - `HGVSp` is written for an insertion or deletion written in the 5' UTR, or an intron of it, that the 3' shift carries into the coding sequence. (#124)
+  - `HGVSp` of an insertion or deletion the 3' shift moves into the first codon reads the start codon there: `p.Met1=` or the lost start, the intended divergence `hgvsp_shifted_indel_written_span_start_test` (`docs/divergences/hgvsp-shifted-indel-written-span-start-test.md`). (#124)
 
 ### Security
 
 - Security and robustness
-  - Cleared from the dependency tree: RUSTSEC-2026-0595 (`parquet` 60.1.0, Bloom filters left unencrypted in an encrypted Parquet file, which vep-rs never writes), through arrow and parquet 60.2.0.
+  - Cleared from the dependency tree: RUSTSEC-2026-0595 (`parquet` 60.1.0, Bloom filters left unencrypted in an encrypted Parquet file, which vep-rs never writes), through arrow and parquet 60.2.0. (#124)
 
 ## [0.6.0] - 2026-11-19
 

@@ -84,6 +84,8 @@ The job leaves these files in the output directory:
 
 `job.json` is diagnostics, and nothing in it is a table column. The job writes `exact`, `differs:unclassified` or an `excluded:` value, never another `differs:` name. The outputs are `exact` when the comparison leaves no row open. For a genome checked on its RefSeq or its merged cache the comparison names the converted cache. It so sets aside the rows of the documented difference [`merged_same_stable_id_collapse`](cache-conversion.md#a-transcript-model-the-cache-carries-at-two-loci-under---refseq-or---merged) and, on a merged cache, of [`merged_same_dbid_collapse`](divergences/merged-same-dbid-collapse.md).
 
+The comparison names the converted cache for a genome checked on its Ensembl transcripts as well. A documented difference at a coding end, such as [`start_codon_overlap_without_start_codon`](divergences/start-codon-overlap-without-start-codon.md), is set aside only on the reading of the transcript's record there.
+
 | Exit code | Meaning |
 | --- | --- |
 | 0 | `exact`, a `recheck` match, or the `--stop-after` stage reached |

@@ -3,7 +3,7 @@ page = "docs/divergences/hgvsp-start-codon-test-past-the-shifted-allele.md"
 verified_against = "116.3"
 image = "ensemblorg/ensembl-vep@sha256:2a46b0ba4ac544a87136aad92af92050ccbbf09098c1ce306d7e88ef7ed19aa3"
 input_class = "observed"
-input_class_basis = "2 · 137,702 per million · 1 flag set, 104 corpora"
+input_class_basis = "2 · 137,702 per million · 1 flag set, 144 corpora"
 notes = "Three made-up records on chromosome 21 of GRCh38, each written in a 5' UTR before the place the 3' shift moves it to. The first deletes one base two bases before the first coding base of the forward-strand ENST00000481605; that base, the base after it and the first coding base are equal, so under --shift_3prime 1 the deletion is annotated on coding base 1. The second adds, before the last two 5' UTR bases of the same transcript, three bases equal to those two and the first coding base, and is annotated three bases on, between coding bases 1 and 2; the third does the same on the forward-strand ENST00000400183. The whole coding sequence stands behind each moved allele. Ensembl VEP makes its second start codon test the shift length past the allele, finds the start codon standing at the old coding start, writes no start_lost and reads the notation from the coding sequence edited without the 5' UTR: a frameshift at residue 1 with the unknown count, and an insertion between a residue 0 and residue 1 named as the translation's last residue. vep-rs tests the start codon at the moved allele and writes the first residue unchanged."
 
 [input]

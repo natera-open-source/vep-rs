@@ -73,9 +73,11 @@ line_of() {
 {
     FASTA_GATE_FIRST='if [[ -z "${FASTA}" && "${NO_FASTA}" -ne 1 ]]; then'
     CACHE_GATE_FIRST='if [[ -z "${JSON_CACHE_DIR}" ]]; then'
+    CACHE_ARGS_FIRST='COMPARE_CACHE_ARGS=(--json-cache "${JSON_CACHE_DIR}")'
 }
 _flag_block=$(harness_block 'CANONICAL_CONTIGS_FLAG=(--no-canonical-contigs)' 'fi')
 _prep_args=$(harness_block 'PREP_ARGS=(' ')')
+_cache_args=$(harness_block "$CACHE_ARGS_FIRST" 'fi')
 _compare_args=$(harness_block 'COMPARE_ARGS=(' ')')
 _fasta_name=$(harness_block 'ensembl_fasta_name() {' '}')
 _fasta_gate=$(harness_block "$FASTA_GATE_FIRST" 'fi')
@@ -155,6 +157,7 @@ done
     BENCHMARK_DIR=/bench WORK_DIR=/work REFERENCE_RELEASE=116.2
     eval "$_flag_block"
     eval "$_prep_args"
+    eval "$_cache_args"
     eval "$_compare_args"
     printf '%s\n' "${PREP_ARGS[@]}" >"$TMP/prepare.words"
     printf '%s\n' "${COMPARE_ARGS[@]}" >"$TMP/compare.words"
@@ -164,6 +167,50 @@ for _list in prepare compare; do
         ok "the $_list step's arguments carry the flag and the cache's contig_order as its value"
     else
         bad "the $_list step's arguments lack --canonical-contigs $CONTIG_ORDER: '$(tr '\n' ' ' <"$TMP/$_list.words" 2>/dev/null)' $(cat "$TMP/lists.stderr")"
+    fi
+done
+if [[ ! -s "$TMP/lists.stderr" ]] && has_lines "$(cat "$TMP/compare.words" 2>/dev/null)" "--json-cache"$'\n'"$LISTED"; then
+    ok "the compare step's arguments name the cache the vep-rs run reads as --json-cache"
+else
+    bad "the compare step's arguments lack --json-cache $LISTED: '$(tr '\n' ' ' <"$TMP/compare.words" 2>/dev/null)' $(cat "$TMP/lists.stderr")"
+fi
+
+extracted "the block that hands the comparator the cache" "$_cache_args" 'fi'
+
+# compare_words <assembly> <cache dir>: evaluates, with the filter off and under the harness's
+# shell options, the flag block, the block that hands the comparator the cache and the
+# comparator's argument list; prints their standard error, the list's words on one line,
+# then `rc=`.
+compare_words() {
+    # The extracted blocks read the names this subshell sets.
+    # shellcheck disable=SC2034
+    (
+        set -euo pipefail
+        ASSEMBLY="$1" CANONICAL_CONTIGS=0 JSON_CACHE_DIR="$2"
+        WORK_DIR=/work REFERENCE_RELEASE=116.2
+        eval "$_flag_block"
+        eval "$_cache_args"
+        eval "$_compare_args"
+        echo "${COMPARE_ARGS[*]}"
+    ) 2>&1
+    echo "rc=$?"
+}
+# The comparator ends a run under an assembly that is neither human one on a cache that lists
+# no contig_order, whatever the filter switch.
+for _cache in "$UNLISTED" "$EMPTY_LIST"; do
+    _out=$(compare_words MadeUp1 "$_cache")
+    if [[ "$_out" == *" --no-canonical-contigs"$'\n'"rc=0" && "$_out" != *--json-cache* ]]; then
+        ok "an assembly that is neither human one, filter off, ${_cache##*/cache_}: the compare step's arguments name no cache"
+    else
+        bad "MadeUp1 with the filter off on ${_cache##*/}: expected arguments without --json-cache, got '$_out'"
+    fi
+done
+for _case in "MadeUp1 $LISTED" "GRCh37 $UNLISTED" "GRCh38 $UNLISTED"; do
+    _out=$(compare_words "${_case%% *}" "${_case#* }")
+    if [[ "$_out" == *" --no-canonical-contigs --json-cache ${_case#* }"$'\n'"rc=0" ]]; then
+        ok "${_case%% *}, filter off, ${_case##*/cache_}: the compare step's arguments name the cache"
+    else
+        bad "${_case%% *} with the filter off on ${_case##*/}: expected arguments ending --json-cache ${_case#* }, got '$_out'"
     fi
 done
 
