@@ -48,11 +48,11 @@ RUN_KEY_RE = re.compile(r"""\s*["']?run["']?\s*:""")
 REQUIREMENTS_KEY_RE = re.compile(r"  [^\s#-]")
 
 # The newest published release: its version, the sha256 its SHA256SUMS states for
-# vep-rs-<version>.tar.gz, and what its binaries run. 0.6.0 writes Parquet without
-# the duckdb program (crates/vep-cli/src/runner.rs of that tarball has no
-# check_duckdb), and its three binaries start no other program.
-PUBLISHED_VERSION = "0.6.0"
-PUBLISHED_SHA256 = "027100a1775048f3881964cfd1f404c5d63e32264a61ce57621a613c9f9d8b2f"
+# vep-rs-<version>.tar.gz, and what its binaries run. Under crates/ of the 1.0.0
+# tarball a process is started only in test code and in bench_plugins, which the
+# recipe does not install, so its three binaries start no other program.
+PUBLISHED_VERSION = "1.0.0"
+PUBLISHED_SHA256 = "a216e0a9449801b18247764a004334f145b013113fca6ac3dbd2e6c2a2794d16"
 PUBLISHED_RUN: tuple[str, ...] = ()
 
 

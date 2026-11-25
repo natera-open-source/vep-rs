@@ -222,6 +222,9 @@ def test_a_commented_out_requirement_is_refused() -> None:
     meta, build, version = shipped()
     for line, error in (
         ("    - {{ compiler('rust') }}\n", "build requirements lack {{ compiler('rust') }}"),
+        # The published release's lockfile holds crates that compile C sources.
+        ("    - {{ compiler('c') }}\n", "build requirements lack {{ compiler('c') }}"),
+        ("    - {{ stdlib('c') }}\n", "build requirements lack {{ stdlib('c') }}"),
         (
             "    - {{ pin_subpackage('vep-rs', max_pin=\"x.x\") }}\n",
             'run_exports does not pin vep-rs with max_pin="x.x"',
