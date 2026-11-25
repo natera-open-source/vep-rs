@@ -65,7 +65,7 @@ arrow-schema = "60"
 arrow-select = "60"
 
 # Genomics
-noodles = { version = "0.115", features = ["vcf", "bgzf", "core", "fasta", "tabix", "csi"] }
+noodles = { version = "0.116", features = ["vcf", "bgzf", "core", "fasta", "tabix", "csi"] }
 noodles-bgzf = { version = "0.51", features = ["libdeflate"] }
 # bigWig reader for the optional LoFTEE plugin's GERP-weighted END_TRUNC filter.
 # Only exercised when `--plugin LoFTEE,gerp_bigwig=...` is passed; the default
