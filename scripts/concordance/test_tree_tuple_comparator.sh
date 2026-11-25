@@ -57,12 +57,13 @@ TOOL_REL="tools/vep-outputs-compare/target/release/vep-outputs-compare"
 LOG="$TMP/started"
 mkdir -p "$TMP/bin" "$TMP/built/$(dirname "$TOOL_REL")" "$TMP/unbuilt" "$TMP/inert_build/$(dirname "$TOOL_REL")" "$TMP/dir_build/$TOOL_REL"
 # Each stub appends its label and arguments, one line a start. The cargo stub fails a
-# `build` while CARGO_BUILD_FAILS is set.
+# `build` while CARGO_BUILD_FAILS is set, and on a `--names` run it reads the names it is
+# fed, as the tool does: a sorter whose reader has gone prints a broken-pipe line.
 stub() {
     printf '#!/bin/bash\nprintf "%%s\\n" "%s $*" >>"%s"\n%s\n' "$2" "$LOG" "${3:-}" >"$1"
     chmod +x "$1"
 }
-stub "$TMP/bin/cargo" cargo '[[ "$1" == build && -n "${CARGO_BUILD_FAILS:-}" ]] && exit 101; exit 0'
+stub "$TMP/bin/cargo" cargo '[[ "$1" == build && -n "${CARGO_BUILD_FAILS:-}" ]] && exit 101; [[ " $* " == *" --names "* ]] && cat >/dev/null; exit 0'
 stub "$TMP/bin/python3" python3
 stub "$TMP/bin/comparator" comparator
 stub "$TMP/bin/vep" vep
