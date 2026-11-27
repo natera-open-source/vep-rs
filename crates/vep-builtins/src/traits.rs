@@ -18,10 +18,11 @@
 use std::sync::Arc;
 
 use indexmap::IndexMap;
+use rayon::prelude::*;
 use vep_core::consequence::{RowKind, TranscriptConsequence};
 use vep_core::variant::InputVariant;
 
-use crate::pool_pass::about_record;
+use crate::pool_pass::{about_record, map_in_order};
 
 /// Errors from builtin plugin execution.
 #[derive(Debug, thiserror::Error)]
@@ -432,29 +433,9 @@ pub trait BuiltinPlugin: sealed::Sealed + Send + Sync {
     fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
         let mut first_failure = None;
         for variant in variants.iter_mut() {
-            if !self.annotates_variant(variant) {
-                continue;
+            if let Err(error) = run_rows(self, variant) {
+                first_failure.get_or_insert(error);
             }
-            about_record(variant.input_record, || {
-                for tc_idx in 0..variant.transcript_consequences.len() {
-                    if !self.annotates_row(&variant.transcript_consequences[tc_idx]) {
-                        continue;
-                    }
-                    let row = &variant.transcript_consequences[tc_idx];
-                    match self.run_naming_empty_strings(row, variant) {
-                        Ok((fields, empty_strings)) => {
-                            let row = &mut variant.transcript_consequences[tc_idx];
-                            for (key, value) in fields {
-                                let empty_string = empty_strings.contains(&key);
-                                row.set_plugin_value(key, value, empty_string);
-                            }
-                        }
-                        Err(error) => {
-                            first_failure.get_or_insert(error);
-                        }
-                    }
-                }
-            });
         }
         match first_failure {
             Some(error) => Err(error),
@@ -488,6 +469,55 @@ pub trait BuiltinPlugin: sealed::Sealed + Send + Sync {
     ) -> Result<(IndexMap<String, String>, Vec<String>), PluginError> {
         Ok((self.run(consequence, variant)?, Vec::new()))
     }
+}
+
+/// The default [`BuiltinPlugin::run_batch`] over one variant: every row the
+/// plugin annotates gets the fields its `run` returns, and the first failure
+/// comes back after the variant's last row. The warnings the rows raise go on
+/// under the variant's input record (`about_record`).
+fn run_rows<P: BuiltinPlugin + ?Sized>(
+    plugin: &P,
+    variant: &mut InputVariant,
+) -> Result<(), PluginError> {
+    if !plugin.annotates_variant(variant) {
+        return Ok(());
+    }
+    let mut first_failure = None;
+    about_record(variant.input_record, || {
+        for tc_idx in 0..variant.transcript_consequences.len() {
+            if !plugin.annotates_row(&variant.transcript_consequences[tc_idx]) {
+                continue;
+            }
+            let row = &variant.transcript_consequences[tc_idx];
+            match plugin.run_naming_empty_strings(row, variant) {
+                Ok((fields, empty_strings)) => {
+                    let row = &mut variant.transcript_consequences[tc_idx];
+                    for (key, value) in fields {
+                        let empty_string = empty_strings.contains(&key);
+                        row.set_plugin_value(key, value, empty_string);
+                    }
+                }
+                Err(error) => {
+                    first_failure.get_or_insert(error);
+                }
+            }
+        }
+    });
+    first_failure.map_or(Ok(()), Err)
+}
+
+/// The default [`BuiltinPlugin::run_batch`] with the variants spread over the
+/// current rayon pool, for a plugin whose `run` reads shared data alone: the
+/// fields, the warnings and the failure returned are the serial default's,
+/// the first failure in variant order (`map_in_order`).
+pub(crate) fn run_batch_in_parallel<P: BuiltinPlugin + ?Sized>(
+    plugin: &P,
+    variants: &mut [InputVariant],
+) -> Result<(), PluginError> {
+    map_in_order(variants.par_iter_mut(), |variant| run_rows(plugin, variant))
+        .into_iter()
+        .find(Result::is_err)
+        .unwrap_or(Ok(()))
 }
 
 /// The default reading of [`BuiltinPlugin::remote_data_file`]: the URL
@@ -651,6 +681,97 @@ mod tests {
                 held(99, "names 99 at 200"),
             ]
         );
+    }
+
+    /// A per-consequence plugin whose `run` raises a warning on every row and
+    /// fails on the rows of a variant at a multiple of three; it writes the
+    /// variant's position on every other row. The earlier the variant, the
+    /// longer its rows take, so threads end in the reverse of variant order.
+    struct SlowFailingPlugin;
+
+    impl crate::traits::sealed::Sealed for SlowFailingPlugin {}
+
+    impl BuiltinPlugin for SlowFailingPlugin {
+        fn name(&self) -> &str {
+            "SlowFailing"
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            vec![]
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            Ok(())
+        }
+        fn run(
+            &self,
+            _consequence: &TranscriptConsequence,
+            variant: &InputVariant,
+        ) -> Result<IndexMap<String, String>, PluginError> {
+            std::thread::sleep(std::time::Duration::from_micros(50 * (40 - variant.start)));
+            let _ = vep_core::warning_hold::offer(0, format!("row at {}", variant.start));
+            if variant.start % 3 == 0 {
+                return Err(PluginError::Run(format!("fails at {}", variant.start)));
+            }
+            Ok(IndexMap::from([(
+                "Position".to_string(),
+                variant.start.to_string(),
+            )]))
+        }
+    }
+
+    /// The parallel default writes the fields, hands on the warnings and
+    /// returns the failure the serial default does: the first failure in
+    /// variant order, whatever thread ran which variant.
+    #[test]
+    fn the_parallel_default_run_batch_matches_the_serial_one() {
+        use vep_core::warning_hold::holding;
+        let batch = || -> Vec<InputVariant> {
+            (1..40u64)
+                .map(|position| {
+                    let mut variant = InputVariant::new(
+                        "21".into(),
+                        position,
+                        position,
+                        b"A".to_vec(),
+                        b"G".to_vec(),
+                    );
+                    variant.input_record = position;
+                    variant
+                        .transcript_consequences
+                        .extend([row(FeatureType::Transcript), row(FeatureType::Transcript)]);
+                    variant
+                })
+                .collect()
+        };
+        let mut serial = batch();
+        let (serial_result, serial_raised) = holding(|| SlowFailingPlugin.run_batch(&mut serial));
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap();
+        let mut parallel = batch();
+        let (parallel_result, parallel_raised) =
+            pool.install(|| holding(|| run_batch_in_parallel(&SlowFailingPlugin, &mut parallel)));
+        assert_eq!(
+            serial_result.unwrap_err().to_string(),
+            "plugin execution failed: fails at 3"
+        );
+        assert_eq!(
+            parallel_result.unwrap_err().to_string(),
+            "plugin execution failed: fails at 3"
+        );
+        assert_eq!(parallel_raised, serial_raised);
+        assert_eq!(parallel_raised.len(), 2 * 39);
+        let fields = |variants: &[InputVariant]| -> Vec<IndexMap<String, String>> {
+            variants
+                .iter()
+                .flat_map(|v| {
+                    v.transcript_consequences
+                        .iter()
+                        .map(|tc| tc.plugin_data.clone())
+                })
+                .collect()
+        };
+        assert_eq!(fields(&parallel), fields(&serial));
     }
 
     /// The value the default `run_batch` writes on a row stands over an

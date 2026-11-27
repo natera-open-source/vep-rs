@@ -44,13 +44,13 @@
 //! the span of those bases, its bases stand in place of them (`:108-110`), and
 //! neither moves under `--hgvs`.
 //!
-//! Per-transcript plugin: returns annotation from [`crate::BuiltinPlugin::run`]
-//! via the default [`crate::BuiltinPlugin::run_batch`] dispatcher.
+//! Per-transcript plugin: returns annotation from [`crate::BuiltinPlugin::run`],
+//! its rows annotated side by side on the current rayon pool.
 
 use indexmap::IndexMap;
 
 use crate::params::parse_none;
-use crate::traits::{BuiltinPlugin, PluginError};
+use crate::traits::{run_batch_in_parallel, BuiltinPlugin, PluginError};
 use vep_core::codon::{reverse_complement, seq_is_dna, translate_sequence};
 use vep_core::consequence::{Consequence, TranscriptConsequence, TranscriptSequences};
 use vep_core::coordinate::Strand;
@@ -115,6 +115,10 @@ impl BuiltinPlugin for DownstreamPlugin {
             );
         }
         Ok(result)
+    }
+
+    fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
+        run_batch_in_parallel(self, variants)
     }
 }
 
@@ -279,39 +283,51 @@ fn translate_change(
     // sequence as Perl clips it.
     let from = (cds_start - 1).min(cds.len());
     let to = (cds_end.max(cds_start - 1)).min(cds.len());
-    let mut changed = Vec::with_capacity(cds.len() + allele.len());
-    changed.extend_from_slice(&cds[..from]);
-    changed.extend_from_slice(allele);
-    changed.extend_from_slice(&cds[to..]);
-
     let first_touched_codon = from - from % 3;
     let utr = sequences
         .three_prime_utr
         .as_deref()
         .map_or(&[][..], str::as_bytes);
-    let mut downstream = changed[first_touched_codon..].to_vec();
+    let mut downstream =
+        Vec::with_capacity(cds.len() - first_touched_codon + allele.len() + utr.len());
+    downstream.extend_from_slice(&cds[first_touched_codon..from]);
+    downstream.extend_from_slice(allele);
+    downstream.extend_from_slice(&cds[to..]);
     downstream.extend_from_slice(utr);
-    changed.extend_from_slice(utr);
 
+    // The changed sequence is the codons before the first touched one and
+    // then `downstream`, so its translation is theirs and then `downstream`'s.
     let table = sequences.codon_table;
-    let downstream_peptide = translate_sequence(&downstream, table);
-    let changed_peptide = translate_sequence(&changed, table);
+    let downstream_peptide = translate_until_stop(&downstream, table);
+    let upstream_peptide = translate_until_stop(&cds[..first_touched_codon], table);
+    let changed_length = if upstream_peptide.len() < first_touched_codon / 3 {
+        upstream_peptide.len()
+    } else {
+        upstream_peptide.len() + downstream_peptide.len()
+    };
     let reference_length = match sequences.peptide.as_deref() {
         Some(peptide) => peptide.len(),
-        None => until_stop(&translate_sequence(cds, table)).len(),
+        None => translate_until_stop(cds, table).len(),
     };
     Prediction {
-        protein: String::from_utf8_lossy(until_stop(&downstream_peptide)).into_owned(),
-        length_change: until_stop(&changed_peptide).len() as i64 - reference_length as i64,
+        protein: String::from_utf8_lossy(&downstream_peptide).into_owned(),
+        length_change: changed_length as i64 - reference_length as i64,
     }
 }
 
-/// `s/\*.*//`: the translation up to its first stop.
-fn until_stop(peptide: &[u8]) -> &[u8] {
+/// `translate_sequence` cut at its first stop (`s/\*.*//`), translated in
+/// whole-codon pieces so the bases past the stop are never read.
+fn translate_until_stop(seq: &[u8], table: u8) -> Vec<u8> {
+    let mut peptide = Vec::new();
+    for piece in seq.chunks(3 * 64) {
+        let start = peptide.len();
+        peptide.extend(translate_sequence(piece, table));
+        if let Some(stop) = peptide[start..].iter().position(|&residue| residue == b'*') {
+            peptide.truncate(start + stop);
+            break;
+        }
+    }
     peptide
-        .iter()
-        .position(|&residue| residue == b'*')
-        .map_or(peptide, |stop| &peptide[..stop])
 }
 
 #[cfg(test)]
@@ -376,6 +392,41 @@ mod tests {
             protein: result.get(PROTEIN_FIELD)?.clone(),
             length_change: result.get(LENGTH_FIELD)?.parse().unwrap(),
         })
+    }
+
+    /// Translating up to the first stop gives the whole translation cut at its
+    /// first stop (`s/\*.*//`): a stop in the first piece, past it or none,
+    /// a partial last codon, an ambiguous codon, and a table that is not known.
+    #[test]
+    fn the_translation_cut_at_its_first_stop_is_the_whole_one_cut() {
+        let codons = |n: usize| "GCT".repeat(n);
+        let cases = [
+            String::new(),
+            "GC".to_string(),
+            format!("{}TAA{}", codons(2), codons(300)),
+            format!("{}TAG{}G", codons(64), codons(10)),
+            format!("{}TGA", codons(200)),
+            format!("{}RAY{}GA", codons(130), codons(70)),
+            codons(500),
+        ];
+        for table in [1, 2, 99] {
+            for seq in &cases {
+                assert_eq!(
+                    translate_until_stop(seq.as_bytes(), table),
+                    until_stop(&translate_sequence(seq.as_bytes(), table)),
+                    "table {table}, {} bases",
+                    seq.len()
+                );
+            }
+        }
+    }
+
+    /// `s/\*.*//`: the translation up to its first stop.
+    fn until_stop(peptide: &[u8]) -> &[u8] {
+        peptide
+            .iter()
+            .position(|&residue| residue == b'*')
+            .map_or(peptide, |stop| &peptide[..stop])
     }
 
     /// Deleting CDS base 5 (the second `A` of `AAA`, codon 2) leaves

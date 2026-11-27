@@ -612,6 +612,38 @@ fn fork_1_matches_fork_4_on_every_format_in_both_modes() {
     }
 }
 
+/// LoFTEE and Downstream annotate a batch's variants side by side on the run's
+/// pool, so every manifest run of a corpus that covers either writes the same
+/// bytes on sixteen threads as on one.
+#[test]
+fn pool_annotated_plugins_write_the_same_bytes_at_fork_1_and_16() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut compared = 0usize;
+    for corpus in &corpora() {
+        let covers = corpus.manifest["covers"].as_array().into_iter().flatten();
+        if !covers
+            .filter_map(|plugin| plugin.as_str())
+            .any(|plugin| ["LoFTEE", "Downstream"].contains(&plugin))
+        {
+            continue;
+        }
+        for run in runs(corpus) {
+            let one = run_vep(&run, "default", tmp.path(), &["--fork", "1"]);
+            let sixteen = run_vep(&run, "default", tmp.path(), &["--fork", "16"]);
+            assert_same(
+                &without_run_headers(one.as_bytes()),
+                &without_run_headers(sixteen.as_bytes()),
+                &format!("{}: --fork 16 differs from --fork 1", run.label()),
+            );
+            compared += 1;
+        }
+    }
+    assert!(
+        compared >= 5,
+        "{compared} LoFTEE or Downstream runs compared"
+    );
+}
+
 /// Every writer strategy, at every buffer size, to a file and to standard
 /// output, writes the bytes of the default run (buffered, the built-in size, to
 /// a file).

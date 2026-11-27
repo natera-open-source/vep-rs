@@ -107,7 +107,7 @@
 //! flags; without it those checks are skipped.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use bigtools::utils::file::reopen::ReopenableFile;
 use bigtools::{BBIReadError, BigWigRead};
@@ -118,12 +118,14 @@ use super::parse_rank_of_total;
 use crate::bigwig::open_bigwig;
 use crate::params::{perl_numeric, warn_unread_parameters};
 use crate::perl_format::perl_number;
+use crate::pool_pass::raise_again;
 use crate::sqlite::{PerlValue, SqliteFile};
 use crate::tabix::{TabixAnnotator, TabixConfig};
-use crate::traits::{BuiltinPlugin, PluginError};
+use crate::traits::{run_batch_in_parallel, BuiltinPlugin, PluginError};
 use vep_core::consequence::{Consequence, LofteeContext, TranscriptConsequence};
 use vep_core::sv_routing::perl_true;
 use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::warning_hold::Held;
 
 const FIELD_LOF: &str = "LoF";
 const FIELD_FILTER: &str = "LoF_filter";
@@ -543,12 +545,12 @@ struct GerpReader {
 /// The GERP source's open file, per format.
 enum GerpData {
     /// `BigWigRead::get_interval` takes `&mut self` and the plugin is queried
-    /// through `&self`. The `vep` pipeline runs one batch's plugin phase at a
-    /// time, so the lock is uncontended there; batches annotated on several
-    /// threads serialise their GERP reads on it.
-    BigWig(Mutex<BigWigRead<ReopenableFile>>),
+    /// through `&self` from several threads at once, so each walk checks out
+    /// an idle reader, the one opened at `init` first, or opens the file again
+    /// when none is idle, and returns it after.
+    BigWig(Mutex<Vec<BigWigRead<ReopenableFile>>>),
     /// Queried through `&self`, as every tabix-backed plugin queries its file.
-    TabixTsv(TabixAnnotator),
+    TabixTsv(Box<TabixAnnotator>),
 }
 
 impl GerpReader {
@@ -565,7 +567,7 @@ impl GerpReader {
         }
         let data = match source {
             GerpSource::BigWig(_) => open_bigwig(path)
-                .map(|reader| GerpData::BigWig(Mutex::new(reader)))
+                .map(|reader| GerpData::BigWig(Mutex::new(vec![reader])))
                 .map_err(|e| {
                     PluginError::Init(format!("LoFTEE: failed to open GERP bigWig '{word}': {e}"))
                 })?,
@@ -581,7 +583,7 @@ impl GerpReader {
                     zero_based: false,
                 };
                 TabixAnnotator::open(config)
-                    .map(|table| GerpData::TabixTsv(table.on_assembly(assembly)))
+                    .map(|table| GerpData::TabixTsv(Box::new(table.on_assembly(assembly))))
                     .map_err(|e| {
                         PluginError::Init(format!(
                             "LoFTEE: failed to open GERP tabix TSV '{word}': {e}. \
@@ -608,18 +610,47 @@ impl GerpReader {
         }
     }
 
-    /// Warns, once per run, that the GERP file holds no chromosome `chr`, so
-    /// the interval `chr:lo-hi` counts 0 toward `GERP_DIST`.
-    fn warn_no_chromosome_once(&self, chr: &str, lo: u64, hi: u64) {
-        if !self.no_chromosome_warned.swap(true, Ordering::Relaxed) {
-            let format = self.format_name();
-            warn!(
-                "LoFTEE: the GERP {format} {} holds no chromosome {chr}; {chr}:{lo}-{hi} counts \
-                 0 toward GERP_DIST, as Ensembl VEP's plugin counts it, and later intervals on a \
-                 chromosome the {format} lacks are not reported in this run",
-                self.path
-            );
+    /// The start of the warning that the GERP file holds no chromosome.
+    fn no_chromosome_prefix(&self) -> String {
+        format!(
+            "LoFTEE: the GERP {} {} holds no chromosome ",
+            self.format_name(),
+            self.path
+        )
+    }
+
+    /// Offers the warning that the GERP file holds no chromosome `chr`, so the
+    /// interval `chr:lo-hi` counts 0 toward `GERP_DIST`, to the hold
+    /// `LofteePlugin::first_note_only` filters, unless the run has
+    /// warned of one.
+    fn note_no_chromosome(&self, chr: &str, lo: u64, hi: u64) {
+        if self.no_chromosome_warned.load(Ordering::Relaxed) {
+            return;
         }
+        let format = self.format_name();
+        let text = format!(
+            "{}{chr}; {chr}:{lo}-{hi} counts 0 toward GERP_DIST, as Ensembl VEP's plugin \
+             counts it, and later intervals on a chromosome the {format} lacks are not \
+             reported in this run",
+            self.no_chromosome_prefix()
+        );
+        if let Err(text) = vep_core::warning_hold::offer(0, text) {
+            if !self.no_chromosome_warned.swap(true, Ordering::Relaxed) {
+                warn!("{text}");
+            }
+        }
+    }
+
+    /// `raised` without the warnings of a chromosome the file lacks but the
+    /// first, which stays unless the run has warned of one, so the run warns
+    /// once, of the interval a serial pass meets first.
+    fn drop_later_notes(&self, mut raised: Vec<Held>) -> Vec<Held> {
+        let prefix = self.no_chromosome_prefix();
+        raised.retain(|held| {
+            !held.text.starts_with(&prefix)
+                || !self.no_chromosome_warned.swap(true, Ordering::Relaxed)
+        });
+        raised
     }
 }
 
@@ -701,11 +732,39 @@ impl BuiltinPlugin for LofteePlugin {
         tc: &TranscriptConsequence,
         variant: &InputVariant,
     ) -> Result<IndexMap<String, String>, PluginError> {
-        self.annotate(tc, variant)
+        self.first_note_only(|| self.annotate(tc, variant))
+    }
+
+    /// [`run`](BuiltinPlugin::run) with the warning of a chromosome the GERP
+    /// file lacks left to `run_batch`, which keeps the batch's first.
+    fn run_naming_empty_strings(
+        &self,
+        tc: &TranscriptConsequence,
+        variant: &InputVariant,
+    ) -> Result<(IndexMap<String, String>, Vec<String>), PluginError> {
+        Ok((self.annotate(tc, variant)?, Vec::new()))
+    }
+
+    /// The default `run_batch` with the variants spread over the current
+    /// rayon pool, warning of the batch's first interval on a chromosome the
+    /// GERP file lacks.
+    fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
+        self.first_note_only(|| run_batch_in_parallel(self, variants))
     }
 }
 
 impl LofteePlugin {
+    /// `work`, with the warnings it raises handed on but for the warnings of a
+    /// chromosome the GERP file lacks after the run's first.
+    fn first_note_only<T>(&self, work: impl FnOnce() -> T) -> T {
+        let Some(reader) = &self.gerp_reader else {
+            return work();
+        };
+        let (result, raised) = vep_core::warning_hold::holding(work);
+        raise_again(reader.drop_later_notes(raised));
+        result
+    }
+
     /// [`BuiltinPlugin::init`] with the directory `master`'s default ancestral
     /// FASTA is looked for in: the working directory, which the empty path
     /// names.
@@ -1422,7 +1481,7 @@ fn gerp_weighted_dist(
         } else {
             match summer.sum_interval(chr, lo, hi) {
                 Ok(total) => weighted_dist += total,
-                Err(GerpReadFailure::NoChromosome) => reader.warn_no_chromosome_once(chr, lo, hi),
+                Err(GerpReadFailure::NoChromosome) => reader.note_no_chromosome(chr, lo, hi),
                 // The text names the file and the error, never the interval, so a
                 // file whose reads fail with one text warns once (the sink writes
                 // each text once); a tabix error naming a block offset is its own
@@ -1484,11 +1543,13 @@ fn database_read_failure(database: &SqliteFile, reason: &str) -> PluginError {
 ///   1-based inclusive.
 ///
 /// One summer serves one `gerp_weighted_dist` call, every interval of its exon
-/// walk, over the plugin's [`GerpReader`]: the bigWig reader locked for the
-/// call, the tabix annotator borrowed.
+/// walk, over the plugin's [`GerpReader`]: a bigWig reader checked out at the
+/// first interval and returned when the summer drops, the tabix annotator
+/// borrowed.
 enum GerpSummer<'a> {
     BigWig {
-        reader: MutexGuard<'a, BigWigRead<ReopenableFile>>,
+        reader: Option<BigWigRead<ReopenableFile>>,
+        idle: &'a Mutex<Vec<BigWigRead<ReopenableFile>>>,
         path: &'a str,
     },
     TabixTsv(&'a TabixAnnotator),
@@ -1497,8 +1558,9 @@ enum GerpSummer<'a> {
 impl<'a> GerpSummer<'a> {
     fn of(reader: &'a GerpReader) -> Self {
         match &reader.data {
-            GerpData::BigWig(bigwig) => GerpSummer::BigWig {
-                reader: bigwig.lock().unwrap_or_else(PoisonError::into_inner),
+            GerpData::BigWig(idle) => GerpSummer::BigWig {
+                reader: None,
+                idle,
                 path: &reader.path,
             },
             GerpData::TabixTsv(annotator) => GerpSummer::TabixTsv(annotator),
@@ -1508,7 +1570,20 @@ impl<'a> GerpSummer<'a> {
     /// Total GERP over the 1-based inclusive range `[lo, hi]`.
     fn sum_interval(&mut self, chr: &str, lo: u64, hi: u64) -> Result<f64, GerpReadFailure> {
         match self {
-            GerpSummer::BigWig { reader, path } => {
+            GerpSummer::BigWig { reader, idle, path } => {
+                let reader = match reader {
+                    Some(reader) => reader,
+                    None => {
+                        let checked_out = idle.lock().unwrap_or_else(PoisonError::into_inner).pop();
+                        let checked_out = match checked_out {
+                            Some(idle) => idle,
+                            None => open_bigwig(&**path).map_err(|e| {
+                                GerpReadFailure::FailsRow(format!("reading {path}: {e}"))
+                            })?,
+                        };
+                        reader.insert(checked_out)
+                    }
+                };
                 // bigWig is 0-based half-open, so shift the start and use `hi`
                 // directly as the exclusive end.
                 let q_start = lo.saturating_sub(1) as u32;
@@ -1556,6 +1631,18 @@ impl<'a> GerpSummer<'a> {
                     }
                 }
                 Ok(total)
+            }
+        }
+    }
+}
+
+impl Drop for GerpSummer<'_> {
+    fn drop(&mut self) {
+        if let GerpSummer::BigWig { reader, idle, .. } = self {
+            if let Some(reader) = reader.take() {
+                idle.lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push(reader);
             }
         }
     }
@@ -2870,6 +2957,46 @@ mod tests {
         (tc, variant)
     }
 
+    /// Two batches over chromosome `chr` on a pool of eight threads, each
+    /// variant on its own input record: the first of sixteen variants, the
+    /// one at 1500 first and the rest at earlier bases of the exon, so each
+    /// walks its own interval, the second of one at 1500. The fields of the
+    /// two rows at 1500 come back.
+    fn two_gerp_batches(p: &LofteePlugin, chr: &str) -> Vec<IndexMap<String, String>> {
+        let batch = |positions: &[u64], first_record: u64| -> Vec<InputVariant> {
+            positions
+                .iter()
+                .zip(first_record..)
+                .map(|(&pos, record)| {
+                    let (tc, mut v) = gerp_row(chr);
+                    v.start = pos;
+                    v.end = pos;
+                    v.input_record = record;
+                    v.transcript_consequences.push(tc);
+                    v
+                })
+                .collect()
+        };
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap();
+        let first_positions: Vec<u64> = std::iter::once(1500).chain(1100..1115).collect();
+        let mut first = batch(&first_positions, 1);
+        let mut second = batch(&[1500], 17);
+        let ((), held) = pool.install(|| {
+            vep_core::warning_hold::holding(|| {
+                p.run_batch(&mut first).unwrap();
+                p.run_batch(&mut second).unwrap();
+            })
+        });
+        raise_again(held);
+        [first, second]
+            .iter()
+            .map(|b| b[0].transcript_consequences[0].plugin_data.clone())
+            .collect()
+    }
+
     /// A plugin over a copy of the committed GERP bigWig, cut short after `init`
     /// opened it so the index every interval read starts from is gone and each
     /// read fails; with the copy's path and its directory, kept alive with the
@@ -2902,13 +3029,8 @@ mod tests {
         p.init(&[format!("gerp_bigwig={}", fixture_gerp_bigwig().display())])
             .unwrap();
         let warnings = Arc::new(Warnings::default());
-        let outputs = tracing::subscriber::with_default(Arc::clone(&warnings), || {
-            let (tc, v) = gerp_row("22");
-            let first = p.run(&tc, &v).unwrap();
-            let (tc, v) = gerp_row("22");
-            let second = p.run(&tc, &v).unwrap();
-            [first, second]
-        });
+        let outputs =
+            tracing::subscriber::with_default(Arc::clone(&warnings), || two_gerp_batches(&p, "22"));
         for out in &outputs {
             assert_eq!(out.get("LoF").map(String::as_str), Some("HC"), "{out:?}");
             assert_eq!(
@@ -2928,6 +3050,7 @@ mod tests {
                 fixture_gerp_bigwig().display()
             )]
         );
+        assert_eq!(*warnings.1.lock().unwrap(), [1]);
     }
 
     /// `gerp_dist.pl` opens the bigWig through `Bio::DB::BigWig->new`, which
@@ -2949,6 +3072,89 @@ mod tests {
             matches!(&err, PluginError::Run(text) if text.starts_with(&prefix) && !text.contains("1500")),
             "{err}"
         );
+    }
+
+    /// Two batches annotated at once on one plugin each keep their own note of
+    /// a chromosome the bigWig lacks: the batch on chromosome 21, which the
+    /// file holds, raises none, and the batch on 22 raises the one of its
+    /// earliest variant. A row run outside a batch warns once per run.
+    #[test]
+    fn batches_at_once_keep_their_own_note_of_a_chromosome_the_bigwig_lacks() {
+        use crate::test_fixtures::Warnings;
+        use vep_core::warning_hold::holding;
+        let batch = |chr: &str, positions: &[u64], first_record: u64| -> Vec<InputVariant> {
+            positions
+                .iter()
+                .zip(first_record..)
+                .map(|(&pos, record)| {
+                    let (tc, mut v) = gerp_row(chr);
+                    v.start = pos;
+                    v.end = pos;
+                    v.input_record = record;
+                    v.transcript_consequences.push(tc);
+                    v
+                })
+                .collect()
+        };
+        let lacking: Vec<u64> = std::iter::once(1500).chain(1100..1400).collect();
+        for _ in 0..20 {
+            let mut p = LofteePlugin::new();
+            p.init(&[format!("gerp_bigwig={}", fixture_gerp_bigwig().display())])
+                .unwrap();
+            let mut held_on = batch("21", &[1500], 1);
+            let mut lacks = batch("22", &lacking, 101);
+            let (held, lacked) = std::thread::scope(|s| {
+                let lacked = s.spawn(|| holding(|| p.run_batch(&mut lacks).unwrap()).1);
+                let held = s.spawn(|| holding(|| p.run_batch(&mut held_on).unwrap()).1);
+                (held.join().unwrap(), lacked.join().unwrap())
+            });
+            assert!(held.is_empty(), "{held:?}");
+            assert_eq!(lacked.len(), 1, "{lacked:?}");
+            assert_eq!(lacked[0].input_record, 101);
+            assert!(
+                lacked[0].text.contains("22:1500-2000"),
+                "{}",
+                lacked[0].text
+            );
+        }
+
+        let mut p = LofteePlugin::new();
+        p.init(&[format!("gerp_bigwig={}", fixture_gerp_bigwig().display())])
+            .unwrap();
+        let warnings = Arc::new(Warnings::default());
+        tracing::subscriber::with_default(Arc::clone(&warnings), || {
+            for _ in 0..2 {
+                let (tc, v) = gerp_row("22");
+                p.run(&tc, &v).unwrap();
+            }
+        });
+        assert_eq!(warnings.0.lock().unwrap().len(), 1);
+    }
+
+    /// A walk reads the bigWig through the handle `init` opened while that one
+    /// is idle, so rows read after the file is removed get the `GERP_DIST`
+    /// the file gave.
+    #[test]
+    fn a_gerp_bigwig_removed_after_init_is_read_through_the_init_handle() {
+        let row = |p: &LofteePlugin| {
+            let (tc, v) = gerp_row("21");
+            p.run(&tc, &v).unwrap()
+        };
+        let mut kept = LofteePlugin::new();
+        kept.init(&[format!("gerp_bigwig={}", fixture_gerp_bigwig().display())])
+            .unwrap();
+        let expected = row(&kept);
+        assert!(expected["LoF_info"].contains("GERP_DIST:"), "{expected:?}");
+
+        let dir = tempfile::tempdir().unwrap();
+        let bigwig = dir.path().join("gerp.bw");
+        std::fs::copy(fixture_gerp_bigwig(), &bigwig).unwrap();
+        let mut p = LofteePlugin::new();
+        p.init(&[format!("gerp_bigwig={}", bigwig.display())])
+            .unwrap();
+        std::fs::remove_file(&bigwig).unwrap();
+        assert_eq!(row(&p), expected);
+        assert_eq!(row(&p), expected);
     }
 
     /// master's `gerp_dist.pl` reads the tabix TSV through a `tabix` subprocess
@@ -3012,13 +3218,8 @@ mod tests {
         ])
         .unwrap();
         let warnings = Arc::new(Warnings::default());
-        let outputs = tracing::subscriber::with_default(Arc::clone(&warnings), || {
-            let (tc, v) = gerp_row("22");
-            let first = p.run(&tc, &v).unwrap();
-            let (tc, v) = gerp_row("22");
-            let second = p.run(&tc, &v).unwrap();
-            [first, second]
-        });
+        let outputs =
+            tracing::subscriber::with_default(Arc::clone(&warnings), || two_gerp_batches(&p, "22"));
         for out in &outputs {
             assert_eq!(out.get("LoF").map(String::as_str), Some("LC"), "{out:?}");
             assert_eq!(
@@ -3043,6 +3244,7 @@ mod tests {
                 path.display()
             )]
         );
+        assert_eq!(*warnings.1.lock().unwrap(), [1]);
 
         let reader = GerpReader::open(
             &GerpSource::TabixTsv(path.to_string_lossy().to_string()),
