@@ -93,6 +93,8 @@ pub mod predictions;
 
 use count::counted;
 
+vep_core::cpu_floor_check!("cache-builder");
+
 /// The flags of a `--auto` installation; every flag of a build named one input
 /// at a time is refused beside any of them.
 const INSTALL_FLAGS: [&str; 3] = ["auto", "dir_cache", "site"];

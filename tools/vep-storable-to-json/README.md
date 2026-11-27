@@ -243,9 +243,6 @@ cargo clippy --all-targets --locked --manifest-path tools/vep-storable-to-json/C
 cargo fmt --all --manifest-path tools/vep-storable-to-json/Cargo.toml -- --check
 ```
 
-The root `.cargo/config.toml` applies, so a release binary carries the same `target-cpu` floor as
-`vep` (`neoverse-v1` on aarch64 Linux, `x86-64-v3` on x86_64 Linux).
-
 The reference bytes are the contract, and `cargo test` holds the binary to them. A change that is
 meant to move the contract rewrites the files it moves under `tests/fixtures/expected/<case>/out/`
 with the binary's own output, so that the diff of the fixtures shows the change.

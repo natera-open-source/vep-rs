@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# .cargo/config.toml sets target-cpu to x86-64-v3 and neoverse-v1. RUSTFLAGS
-# replaces those rustflags, so this package uses the generic CPU floors.
+# The package builds for the CPU floors of the generic release archives.
 set -euo pipefail
 
 case "$(uname -s)-$(uname -m)" in

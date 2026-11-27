@@ -75,9 +75,9 @@ unzip -q "$tools/openssl.conda" 'pkg-*.tar.zst' -d "$tools"
 tar --zstd -xf "$tools"/pkg-*.tar.zst -C "$tools/openssl" lib include
 openssl_dir="$(echo "$TARGET" | tr 'a-z-' 'A-Z_')_OPENSSL_DIR=$tools/openssl"
 
-# RUSTFLAGS replaces the target rustflags of .cargo/config.toml, as in
-# release.yml. The installed cargo-zigbuild is run by its path: `cargo
-# zigbuild` runs the first one cargo finds, its own home's before PATH's.
+# RUSTFLAGS sets the archive's CPU floor, as in release.yml. The installed
+# cargo-zigbuild is run by its path: `cargo zigbuild` runs the first one cargo
+# finds, its own home's before PATH's.
 (cd "$ROOT" && env PATH="$tools/zig:$PATH" "$openssl_dir" RUSTFLAGS="-C target-cpu=$CPU" SOURCE_DATE_EPOCH="$clock" \
     "$tools/cargo/bin/cargo-zigbuild" zigbuild --release --locked --target "$TARGET.$GLIBC_FLOOR" \
     --bin vep --bin vep-cache-builder --bin vep-cache-converter) ||

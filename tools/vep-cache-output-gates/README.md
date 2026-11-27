@@ -131,8 +131,7 @@ cargo clippy --all-targets --locked --manifest-path $m -- -D warnings
 cargo fmt --all --manifest-path $m -- --check
 ```
 
-The package has no dependency. The root `.cargo/config.toml` applies, so a release binary carries
-the same `target-cpu` floor as `vep`. Nothing regenerates the goldens: the files under
+The package has no dependency. Nothing regenerates the goldens: the files under
 `tests/fixtures/expected/` are the contract, `cargo test` holds the binary to them, and a change of
 the contract changes them in the same commit.
 

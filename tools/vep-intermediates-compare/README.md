@@ -119,9 +119,6 @@ cargo clippy --all-targets --locked --manifest-path tools/vep-intermediates-comp
 cargo fmt --all --manifest-path tools/vep-intermediates-compare/Cargo.toml -- --check
 ```
 
-The root `.cargo/config.toml` applies, so a release binary carries the same `target-cpu` floor as
-`vep` (`neoverse-v1` on aarch64 Linux, `x86-64-v3` on x86_64 Linux).
-
 A run after the tracer, from the repository root:
 
 ```bash

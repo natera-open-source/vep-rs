@@ -37,6 +37,8 @@ use vep_cli::config::{self, CliError, ParseFailure};
 use vep_cli::runner::Teardown;
 use vep_cli::{args, argv, status_colour, stderr, warnings};
 
+vep_core::cpu_floor_check!("vep");
+
 /// The annotation path allocates and frees per (variant x transcript
 /// consequence), and glibc malloc dominates its profile; mimalloc's
 /// thread-local heaps take that cost off the rayon workers.

@@ -203,9 +203,6 @@ cargo clippy --all-targets --locked --manifest-path tools/vep-cache-diff/Cargo.t
 cargo fmt --all --manifest-path tools/vep-cache-diff/Cargo.toml -- --check
 ```
 
-The root `.cargo/config.toml` applies, so a release binary carries the same `target-cpu` floor as
-`vep` (`neoverse-v1` on aarch64 Linux, `x86-64-v3` on x86_64 Linux).
-
 The goldens are the contract in bytes, and `cargo test` holds the binary to them. A change that is
 meant to move the contract rewrites the goldens it moves with the binary's own output, so that the
 diff of the goldens shows the change. From `tests/fixtures`, for a row of `cases.tsv` named

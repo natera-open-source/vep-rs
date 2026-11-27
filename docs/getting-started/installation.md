@@ -29,11 +29,11 @@ cargo install vep-cli --locked
 
 The install puts the `vep` binary alone into Cargo's bin directory (`~/.cargo/bin`). The crate named `vep` on crates.io is an unrelated crate: `cargo install vep` does not install vep-rs. `vep-cache-builder` and `vep-cache-converter` are crates of their own, installed the same way; the builder links OpenSSL on Linux, as in a build from a checkout.
 
-A published crate carries neither the repository's `.cargo/config.toml` nor its release profile, so the install compiles for the generic CPU of its target under Cargo's default release profile, not the configuration the release archives are built with. `RUSTFLAGS="-C target-cpu=native"` before the command builds for the machine it runs on ([CPU floor](#cpu-floor)).
+A published crate does not carry the repository's release profile, so the install compiles under Cargo's default release profile, not the one the release archives are built with. Like a Linux build from a checkout, it compiles for the generic CPU of its target. `RUSTFLAGS="-C target-cpu=native"` before the command builds for the machine it runs on ([CPU floor](#cpu-floor)).
 
 ## CPU floor
 
-In a checkout of the repository, `.cargo/config.toml` compiles every build for a fixed CPU floor, and the measured release binaries are built the same way. The generic Linux archives are built for a CPU floor almost every machine of their architecture meets:
+On Linux, a build from a checkout compiles for the generic CPU of its target, which every machine of the architecture meets: `x86-64` on x86_64 and `generic` on aarch64. On macOS, `.cargo/config.toml` sets `apple-m1` on Apple silicon and `x86-64-v3` on an Intel Mac, floors every Mac macOS 26 supports meets. Cargo reads that file from the directory a build is started in and its parents, so a Mac build is started inside the checkout. The Linux release archives set their CPU floor with `RUSTFLAGS`; the generic ones are built for a floor almost every machine of their architecture meets:
 
 | Archive | `-C target-cpu` | Runs on |
 | --- | --- | --- |
@@ -44,9 +44,10 @@ In a checkout of the repository, `.cargo/config.toml` compiles every build for a
 | `aarch64-apple-darwin` | `apple-m1` | any Apple M-series Mac |
 | `x86_64-apple-darwin` | `x86-64-v3` | AVX2, BMI2 and FMA: every Intel Mac macOS 26 supports |
 
-- On an older CPU, a binary built or downloaded this way aborts with an illegal-instruction fault rather than running slowly. The generic archives are slower than the measured ones; each release page reports the measured difference, or that the release did not time them.
-- Cargo reads `.cargo/config.toml` from the directory a build is started in and its parent directories, not from the manifest's directory. A build started outside the checkout with `--manifest-path` does not apply the checkout's file; start the build inside the checkout.
-- To build for the machine you are on, override the flag for that build. `RUSTFLAGS` replaces the file's setting; it does not add to it. You can also edit the `rustflags` line for your target in `.cargo/config.toml`.
+- On x86_64 Linux, a binary built for a higher floor than its CPU meets stops before it starts, with exit status 1 and one line. The `x86_64-unknown-linux-gnu` archive on an Intel Ivy Bridge prints `ERROR: [vep] this CPU lacks x86-64-v3 instructions (AVX2, BMI1, BMI2, FMA, F16C, LZCNT, MOVBE) this build needs`, and names the builds that run there.
+- On aarch64 and macOS such a binary aborts with an illegal-instruction fault instead.
+- The generic archives are slower than the measured ones; each release page reports the measured difference, or that the release did not time them.
+- To build for the machine you are on, set the CPU for that build:
 
 ```bash
 RUSTFLAGS="-C target-cpu=native" cargo build --release
@@ -105,7 +106,7 @@ The channel builds a release from its own copy of the recipe, `recipes/vep-rs` i
 
 The repository holds a Bioconda recipe, [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml). It builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the source tarball of the published release its `version` names (`vep-rs-X.Y.Z.tar.gz`, the `git archive` the release workflow cuts) with `cargo build --release --locked`.
 
-Linux x86_64 compiles for `x86-64-v2` and Linux aarch64 for a generic CPU, the floors of the generic release archives; macOS x86_64 compiles for `x86-64-v2` and macOS arm64 for `apple-m1`. `.cargo/config.toml` would otherwise compile for `x86-64-v3` and Neoverse V1, which abort with an illegal-instruction fault below those floors. On Linux the build links conda-forge OpenSSL, the same library the release binaries link.
+Linux x86_64 compiles for `x86-64-v2` and Linux aarch64 for a generic CPU, the floors of the generic release archives; macOS x86_64 compiles for `x86-64-v2` and macOS arm64 for `apple-m1`. On Linux the build links conda-forge OpenSSL, the same library the release binaries link.
 
 [What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda) says what a pipeline that installs Ensembl VEP from Bioconda changes.
 

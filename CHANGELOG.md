@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Builds and CPU floors
+  - On Linux, a build from a checkout, `tools/` included, compiles for the target's generic CPU, as `cargo install` does, and runs on any machine; release archives keep their floors. (#181)
+  - On x86_64 Linux, `vep`, `vep-cache-builder` and `vep-cache-converter` built above the machine's CPU floor stop with one `ERROR:` line naming the floor, not an illegal-instruction fault. (#181)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 

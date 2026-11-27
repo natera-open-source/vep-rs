@@ -6,7 +6,7 @@ run requirements are recorded below, and never a version above Cargo.toml's.
 
 The recipe builds vep, vep-cache-builder and vep-cache-converter from the git
 archive the release workflow publishes, with cargo --locked, at the generic CPU
-floors. .cargo/config.toml would otherwise compile for x86-64-v3 and neoverse-v1.
+floors.
 Linux links conda-forge OpenSSL, which is built for glibc 2.17. The binaries
 install from the release directory CARGO_BUILD_TARGET selects. build.sh is read
 as bash runs it: a comment is no command.
@@ -239,7 +239,7 @@ def recipe_errors(meta: str, build: str, version: str) -> list[str]:
 
     if not build.startswith("#!/usr/bin/env bash\n"):
         errors.append("build.sh has no bash shebang")
-    # The comment names the floors .cargo/config.toml sets; only a setting is a miss.
+    # A comment may name any CPU floor; only a setting is a miss.
     code = shell_code(build)
     if "set -euo pipefail" not in code.splitlines():
         errors.append("build.sh does not set -euo pipefail")

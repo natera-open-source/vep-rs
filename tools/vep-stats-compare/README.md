@@ -151,8 +151,7 @@ cargo clippy --all-targets --locked --manifest-path tools/vep-stats-compare/Carg
 cargo fmt --all --manifest-path tools/vep-stats-compare/Cargo.toml -- --check
 ```
 
-The root `.cargo/config.toml` applies, so a release binary carries the same `target-cpu` floor as `vep`
-(`neoverse-v1` on aarch64 Linux, `x86-64-v3` on x86_64 Linux). CI runs the test, clippy and fmt
+CI runs the test, clippy and fmt
 commands above in its Test, Clippy and Format jobs, builds the package on the declared `rust-version`
 in MSRV and audits its lockfile in Advisory Reachability.
 

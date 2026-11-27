@@ -38,8 +38,8 @@ format, and compare the files. The default and tab headers carry an `## Output p
 the VCF header a `time="..."` attribute, both set at run time; mask those two before comparing, and
 nothing else. The headers also echo the command line with the output file's name, so both sides
 write to one file name in two directories. A Parquet output carries a run identifier in every part,
-so it is compared through its `--tab` projection. Cargo reads `.cargo/config.toml` from the
-directory a build is started in and its parent directories, so each tree is built from inside it.
+so it is compared through its `--tab` projection. Both trees build for one CPU: the checkout's
+for the target, or the `RUSTFLAGS` the two builds share.
 
 ```bash
 cargo build --release --locked                                   # the branch: target/release/vep

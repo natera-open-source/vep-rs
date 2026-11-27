@@ -53,6 +53,8 @@ use vep_core::cache_manifest::{CacheManifest, HashingReader};
 use vep_core::coordinate::is_cache_path_component;
 use vep_core::stderr;
 
+vep_core::cpu_floor_check!("cache-converter");
+
 #[derive(Parser)]
 #[command(
     name = "vep-cache-converter",

@@ -17,6 +17,8 @@ pub mod cache_manifest;
 pub mod codon;
 pub mod consequence;
 pub mod coordinate;
+#[doc(hidden)]
+pub mod cpu_floor;
 pub mod custom_annotation;
 pub mod minimal;
 pub mod pick;

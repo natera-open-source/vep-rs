@@ -1147,8 +1147,7 @@ cargo clippy --all-targets --locked --manifest-path $m -- -D warnings
 cargo fmt --all --manifest-path $m -- --check
 ```
 
-The root `.cargo/config.toml` applies, so a release binary carries the same `target-cpu` floor as
-`vep`. The build compiles zlib from the source of the `libz-sys` crate, so it needs a C compiler
+The build compiles zlib from the source of the `libz-sys` crate, so it needs a C compiler
 and nothing of the host's zlib. `cargo test` reads `tests/golden/` and
 `crates/vep-cli/tests/common/mod.rs` of the repository beside the package's own fixtures, and
 `data/classes.tsv` and `tests/data/builder_parity/cases.tsv` of `tools/vep-formats-compare`. The
