@@ -19,6 +19,11 @@
 //! The host calls `vep_plugin_init` exactly once per instance, with zero or more
 //! parameters, before any `vep_plugin_run`; the plugin relies on that order and
 //! treats a departure from it as a defect of the host.
+//!
+//! The loader's tests build it again with `--cfg fixture_fail="<stage>"`, which
+//! fails `create`, `name`, `init`, `header_info`, `feature_types` or `run` as a
+//! defective plugin would, with each destroy counted in the file the build's
+//! `ECHO_DESTROY_MARKER` names.
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::ptr;
@@ -43,6 +48,9 @@ pub extern "C" fn vep_plugin_abi_version() -> u32 {
 
 #[no_mangle]
 pub extern "C" fn vep_plugin_create() -> *mut c_void {
+    if cfg!(fixture_fail = "create") {
+        return ptr::null_mut();
+    }
     let plugin = EchoPlugin {
         name: CString::new("echo").expect("no interior NUL"),
         version: CString::new("0.2.0").expect("no interior NUL"),
@@ -61,6 +69,15 @@ pub extern "C" fn vep_plugin_create() -> *mut c_void {
 pub unsafe extern "C" fn vep_plugin_destroy(instance: *mut c_void) {
     if !instance.is_null() {
         drop(Box::from_raw(instance.cast::<EchoPlugin>()));
+        // A fixture build names a file that counts the destroys past the library's unloading.
+        if let Some(marker) = option_env!("ECHO_DESTROY_MARKER") {
+            use std::io::Write;
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(marker);
+            let _ = file.and_then(|mut file| file.write_all(b"destroyed\n"));
+        }
     }
 }
 
@@ -68,6 +85,9 @@ pub unsafe extern "C" fn vep_plugin_destroy(instance: *mut c_void) {
 /// `instance` must be a live pointer returned by [`vep_plugin_create`].
 #[no_mangle]
 pub unsafe extern "C" fn vep_plugin_name(instance: *const c_void) -> *const c_char {
+    if cfg!(fixture_fail = "name") {
+        return c"\xff".as_ptr();
+    }
     (*instance.cast::<EchoPlugin>()).name.as_ptr()
 }
 
@@ -89,6 +109,9 @@ pub unsafe extern "C" fn vep_plugin_init(
 ) -> i32 {
     let plugin = &mut *instance.cast::<EchoPlugin>();
     plugin.init_calls += 1;
+    if cfg!(fixture_fail = "init") {
+        return 1;
+    }
     if plugin.init_calls > 1 {
         return 2;
     }
@@ -120,7 +143,11 @@ pub unsafe extern "C" fn vep_plugin_init(
 /// `instance` must be a live pointer returned by [`vep_plugin_create`].
 #[no_mangle]
 pub unsafe extern "C" fn vep_plugin_header_info(_instance: *const c_void) -> *mut c_char {
-    let pairs = r#"[["ECHO_PARAM","The first plugin parameter"],["ECHO_FEATURE","The transcript id the consequence names"]]"#;
+    let pairs = if cfg!(fixture_fail = "header_info") {
+        "not JSON"
+    } else {
+        r#"[["ECHO_PARAM","The first plugin parameter"],["ECHO_FEATURE","The transcript id the consequence names"]]"#
+    };
     CString::new(pairs).expect("no interior NUL").into_raw()
 }
 
@@ -129,6 +156,11 @@ pub unsafe extern "C" fn vep_plugin_header_info(_instance: *const c_void) -> *mu
 #[no_mangle]
 pub unsafe extern "C" fn vep_plugin_feature_types(instance: *const c_void) -> *mut c_char {
     let plugin = &*instance.cast::<EchoPlugin>();
+    if cfg!(fixture_fail = "feature_types") {
+        return CString::new(r#"["Gene"]"#)
+            .expect("no interior NUL")
+            .into_raw();
+    }
     match CString::new(plugin.feature_types.as_str()) {
         Ok(text) => text.into_raw(),
         Err(_) => ptr::null_mut(),
@@ -147,6 +179,9 @@ pub unsafe extern "C" fn vep_plugin_run(
     let plugin = &*instance.cast::<EchoPlugin>();
     if plugin.init_calls != 1 {
         return ptr::null_mut();
+    }
+    if cfg!(fixture_fail = "run") {
+        return CString::new([0xff]).expect("no interior NUL").into_raw();
     }
     let Ok(consequence_text) = CStr::from_ptr(consequence_json).to_str() else {
         return ptr::null_mut();

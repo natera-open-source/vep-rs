@@ -54,7 +54,8 @@ pub mod ffi {
     /// Initialize the plugin with parameters. Returns 0 on success, non-zero on error.
     /// Called exactly once per instance, with the `--plugin` parameters after the
     /// name, zero or more, before any other instance call but `vep_plugin_name`
-    /// and `vep_plugin_version`.
+    /// and `vep_plugin_version`. At a count of 0 the parameter pointer is not
+    /// null but must not be dereferenced.
     pub type PluginInitFn = unsafe extern "C" fn(*mut c_void, *const *const c_char, usize) -> i32;
 
     /// Returns the fields the plugin writes, as a JSON array of `[key, description]`
@@ -76,6 +77,9 @@ pub mod ffi {
     ///   `null` (never a null pointer) on an intergenic row.
     /// - Third `*const c_char` is the variant as a JSON string.
     /// - Returns a JSON string that the caller must free via [`PluginFreeFn`].
+    ///
+    /// The host may call it on one instance from several threads at once, so
+    /// the plugin must be thread-safe.
     pub type PluginRunFn =
         unsafe extern "C" fn(*const c_void, *const c_char, *const c_char) -> *mut c_char;
 

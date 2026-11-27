@@ -29,10 +29,13 @@ tracing = { workspace = true }
 #   `vep_plugin_feature_types`, for the loader's default-kind test.
 # - `fixture_missing_free`: `examples/echo_plugin.rs` exports no
 #   `vep_plugin_free`, for the loader's missing-symbol test.
+# - `fixture_fail = "<stage>"`: `examples/echo_plugin.rs` fails that stage of
+#   the load or `run`, for the loader's error-path and cleanup test.
 unexpected_cfgs = { level = "warn", check-cfg = [
     "cfg(fixture_abi_one)",
     "cfg(fixture_no_feature_types)",
     "cfg(fixture_missing_free)",
+    'cfg(fixture_fail, values("create", "name", "init", "header_info", "feature_types", "run"))',
 ] }
 
 # The examples are plugins, so they are built as the dynamic libraries the loader

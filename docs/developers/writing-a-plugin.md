@@ -17,13 +17,10 @@ This page describes:
 vep-rs has two plugin systems:
 
 **Built-in plugins** (`vep-builtins` crate) are compiled into the binary. They
-operate on native Rust types with no serialization overhead. This is the
-recommended approach for canonical VEP plugins.
+operate on native Rust types with no serialization overhead.
 
 **Dynamic plugins** (`vep-plugin` crate) are compiled as separate `cdylib`
-shared libraries loaded at runtime via C FFI. Communication uses JSON
-serialization. This is the route for extensions that ship separately from
-vep-rs. The host side is `crates/vep-cli/src/dylib_plugins.rs`.
+shared libraries loaded at runtime via C FFI. The host side is `crates/vep-cli/src/dylib_plugins.rs`.
 
 ### Worked example
 
@@ -202,7 +199,8 @@ extern "C" fn(*mut c_void, *const *const c_char, usize) -> i32
 
 Receives the `--plugin` parameters after the name as NUL-terminated strings;
 returns 0 on success. Called exactly once per instance, on every load, with a
-count of 0 when no parameter was given. The call comes before
+count of 0, and a non-NULL pointer it must not read, when no parameter was
+given. The call comes before
 `vep_plugin_header_info`, `vep_plugin_feature_types` and any `vep_plugin_run`.
 The fields a plugin declares may therefore depend on its parameters, as Ensembl
 VEP's `get_header_info` may (`BaseVepPlugin.pm` `new`, which receives the
@@ -267,7 +265,8 @@ extern "C" fn(*const c_void, *const c_char, *const c_char) -> *mut c_char
 
 Takes `(instance, consequence JSON, variant JSON)` and returns a NUL-terminated
 JSON object that the host frees with `vep_plugin_free`. On an intergenic row the
-consequence JSON is `null`. NULL signals an error.
+consequence JSON is `null`. NULL signals an error. The host may call it on one
+instance from several threads at once, so it must be thread-safe.
 
 #### `vep_plugin_free`
 

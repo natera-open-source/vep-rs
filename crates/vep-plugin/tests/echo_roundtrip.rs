@@ -187,9 +187,10 @@ fn feature_types_export_is_optional_and_read() {
     std::fs::remove_file(&fixture).unwrap();
 }
 
-/// An example compiled by `rustc` alone with the `cfg` name `fixture_cfg` set,
-/// into `CARGO_TARGET_TMPDIR`: cargo builds each example once, without the name,
-/// and the other tests load that build.
+/// An example compiled by `rustc` alone with the `cfg` `fixture_cfg` set, into
+/// `CARGO_TARGET_TMPDIR`: cargo builds each example once, without it, and the
+/// other tests load that build. The build's `ECHO_DESTROY_MARKER` names the
+/// fixture's path with `.destroyed` appended.
 fn compile_fixture(example: &str, crate_name: &str, fixture_cfg: &str) -> PathBuf {
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")
@@ -205,6 +206,7 @@ fn compile_fixture(example: &str, crate_name: &str, fixture_cfg: &str) -> PathBu
         .args(["--edition", "2021", "--crate-type", "cdylib"])
         .args(["--crate-name", crate_name])
         .args(["--cfg", fixture_cfg])
+        .env("ECHO_DESTROY_MARKER", destroy_marker(&fixture))
         .arg("-o")
         .arg(&fixture)
         .arg(&source)
@@ -216,6 +218,79 @@ fn compile_fixture(example: &str, crate_name: &str, fixture_cfg: &str) -> PathBu
         String::from_utf8_lossy(&output.stderr)
     );
     fixture
+}
+
+/// The file a fixture's `vep_plugin_destroy` adds a line to.
+fn destroy_marker(fixture: &std::path::Path) -> PathBuf {
+    let mut marker = fixture.as_os_str().to_owned();
+    marker.push(".destroyed");
+    PathBuf::from(marker)
+}
+
+/// Each fixture is `echo_plugin.rs` compiled with `--cfg fixture_fail="<stage>"`,
+/// failing that stage. Once `create` has returned an instance, every failure
+/// destroys it, once, while the library is still loaded (`loader.rs`, the
+/// instance owned from `Self` on); the marker file outlives the library.
+#[test]
+fn every_load_failure_after_create_destroys_the_instance_once() {
+    let stages: [(&str, fn(&PluginError) -> bool, &str, usize); 6] = [
+        (
+            "create",
+            |e| matches!(e, PluginError::Init(_)),
+            "plugin create returned null",
+            0,
+        ),
+        (
+            "name",
+            |e| matches!(e, PluginError::Load(_)),
+            "invalid UTF-8 in plugin name",
+            1,
+        ),
+        (
+            "init",
+            |e| matches!(e, PluginError::Init(_)),
+            "plugin 'echo' init returned error code 1",
+            1,
+        ),
+        (
+            "header_info",
+            |e| matches!(e, PluginError::Load(_)),
+            "plugin header info is not a JSON array of [key, description] pairs",
+            1,
+        ),
+        (
+            "feature_types",
+            |e| matches!(e, PluginError::Load(_)),
+            "plugin 'echo' lists an unknown feature type 'Gene'",
+            1,
+        ),
+        (
+            "run",
+            |e| matches!(e, PluginError::Run(_)),
+            "invalid UTF-8 in plugin result",
+            1,
+        ),
+    ];
+    for (stage, variant, message, destroys) in stages {
+        let fixture = compile_fixture(
+            "echo_plugin.rs",
+            &format!("echo_plugin_fail_{stage}"),
+            &format!("fixture_fail=\"{stage}\""),
+        );
+        let marker = destroy_marker(&fixture);
+        let err = match LoadedPlugin::load(&fixture, &[]) {
+            Ok(plugin) => plugin
+                .run(&consequence_json("ENST00000000001"), &variant_json())
+                .unwrap_err(),
+            Err(err) => err,
+        };
+        assert!(variant(&err), "{stage}: {err:?}");
+        assert!(err.to_string().contains(message), "{stage}: {err}");
+        let destroyed = std::fs::read_to_string(&marker).unwrap_or_default();
+        assert_eq!(destroyed.lines().count(), destroys, "{stage}");
+        let _ = std::fs::remove_file(&marker);
+        std::fs::remove_file(&fixture).unwrap();
+    }
 }
 
 /// A plugin that lists `RegulatoryFeature` or `MotifFeature` switches regulatory
