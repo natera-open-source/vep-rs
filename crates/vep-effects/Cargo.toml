@@ -13,8 +13,6 @@ description = "Consequence-calling engine of vep-rs, a Rust reimplementation of 
 [dependencies]
 vep-core = { workspace = true }
 vep-fasta = { workspace = true }
-indexmap = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 smallvec = { workspace = true }
 

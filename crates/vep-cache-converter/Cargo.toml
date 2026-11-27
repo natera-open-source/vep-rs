@@ -21,7 +21,6 @@ vep-core = { workspace = true }
 vep-cli = { workspace = true }
 vep-builtins = { workspace = true }
 noodles = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }

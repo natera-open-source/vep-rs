@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
+  - `vep-io`, `vep-effects`, `vep-cli` and `vep-cache-converter` drop dependencies their code never used: `noodles`, `tracing`, `indexmap`, `thiserror`, `csv` and `serde`. (#176)
 
 ## [1.0.0] - 2026-11-24
 

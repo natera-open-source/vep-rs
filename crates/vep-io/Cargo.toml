@@ -12,12 +12,10 @@ description = "Input parsers (Ensembl, HGVS, SPDI, region, identifier) and outpu
 
 [dependencies]
 vep-core = { workspace = true }
-noodles = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
 parquet = { workspace = true, optional = true }
 arrow-array = { workspace = true, optional = true }
 arrow-schema = { workspace = true, optional = true }
