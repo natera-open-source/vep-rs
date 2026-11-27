@@ -16,7 +16,7 @@ use std::io::Write;
 use indexmap::IndexMap;
 use serde_json::Value;
 
-use vep_core::consequence::{Consequence, TranscriptConsequence};
+use vep_core::consequence::{Consequence, FeatureType, TranscriptConsequence};
 use vep_core::custom_annotation::{
     CustomAnnotations, CustomFieldValue, CustomRecord, CustomStats, CustomValue,
 };
@@ -64,20 +64,20 @@ impl JsonOutputFormatter {
     /// Every object, an unannotated record's included, carries `vep_rs_version`;
     /// a record with no allele is the object carrying that key alone.
     pub fn format_record_value(&self, record: &[&InputVariant]) -> Value {
-        let mut root: IndexMap<String, Value> = IndexMap::new();
+        let mut root: serde_json::Map<String, Value> = serde_json::Map::new();
         root.insert(
             "vep_rs_version".to_string(),
             Value::String(fields::VEP_RS_VERSION.to_string()),
         );
         let Some(&first) = record.first() else {
-            return Value::Object(root.into_iter().collect());
+            return Value::Object(root);
         };
         if record.iter().any(|v| v.vep_skip) {
             // VEP emits the unannotated record as its input line alone.
             if let Some(raw) = &first.raw_input {
                 root.insert("input".to_string(), Value::String(raw.to_string()));
             }
-            return Value::Object(root.into_iter().collect());
+            return Value::Object(root);
         }
         root.insert("id".to_string(), Value::String(first.variation_name()));
         root.insert(
@@ -228,7 +228,7 @@ impl JsonOutputFormatter {
                 .collect();
             root.insert("colocated_variants".to_string(), Value::Array(cvs));
         }
-        Value::Object(serde_json::Map::from_iter(root))
+        Value::Object(root)
     }
 
     /// The JSON value for a single allele treated as a whole record. Embedding
@@ -256,7 +256,7 @@ impl JsonOutputFormatter {
                 Value::Array(consequence_terms),
             )]);
         }
-        let mut obj: IndexMap<String, Value> = IndexMap::new();
+        let mut obj: serde_json::Map<String, Value> = serde_json::Map::new();
         // Under `--shift_genomic 1` VEP writes `Location` into every transcript
         // row's hash of a sequence variant (OutputFactory.pm:1711-1715; a
         // structural variant's rows take `:2127-2134`, which writes none) and
@@ -469,11 +469,7 @@ impl JsonOutputFormatter {
                 }
                 "Feature_type" | "NEAREST" => {}
                 "Feature" => {
-                    let key = format!(
-                        "{}_id",
-                        tc.map(feature_type_key)
-                            .unwrap_or_else(|| "intergenic".to_string())
-                    );
+                    let key = format!("{}_id", tc.map_or("intergenic", feature_type_key));
                     derived.push((key, Some(Value::String(value))));
                 }
                 "cDNA_position" | "CDS_position" | "Protein_position" => {
@@ -578,11 +574,11 @@ impl JsonOutputFormatter {
                     obj.insert(key, value);
                 }
                 None => {
-                    obj.swap_remove(&key);
+                    obj.remove(&key);
                 }
             }
         }
-        serde_json::Map::from_iter(obj)
+        obj
     }
 }
 
@@ -590,7 +586,7 @@ impl JsonOutputFormatter {
 /// `derived` under the key the JSON factory renames that name to
 /// (`renamed_key`).
 fn write_key(
-    obj: &mut IndexMap<String, Value>,
+    obj: &mut serde_json::Map<String, Value>,
     derived: &mut Vec<(String, Option<Value>)>,
     lowercased: String,
     value: Value,
@@ -630,7 +626,7 @@ fn custom_annotations_object(record: &[&InputVariant]) -> Option<Value> {
     if entries.iter().all(|entry| entry.records.is_empty()) {
         return None;
     }
-    let mut object: IndexMap<String, Value> = IndexMap::new();
+    let mut object: serde_json::Map<String, Value> = serde_json::Map::new();
     for entry in &entries {
         if object.contains_key(&*entry.short_name) {
             continue;
@@ -661,14 +657,14 @@ fn custom_annotations_object(record: &[&InputVariant]) -> Option<Value> {
             object.insert(entry.short_name.to_string(), Value::Array(list));
         }
     }
-    Some(Value::Object(serde_json::Map::from_iter(object)))
+    Some(Value::Object(object))
 }
 
 /// One custom record as Ensembl VEP's hash holds it (`File/VCF.pm:231-260`,
 /// `File.pm:459-466`): `name`, `allele` when the record matched one, `fields`
 /// when it carries any and `score` when the source read one.
 fn custom_record_object(record: &CustomRecord) -> Value {
-    let mut object: IndexMap<String, Value> = IndexMap::new();
+    let mut object: serde_json::Map<String, Value> = serde_json::Map::new();
     object.insert("name".to_string(), numberify("name", record.name.clone()));
     if let Some(allele) = &record.allele {
         object.insert(
@@ -694,7 +690,7 @@ fn custom_record_object(record: &CustomRecord) -> Value {
     if let Some(score) = &record.score {
         object.insert("score".to_string(), custom_value_json("score", score));
     }
-    Value::Object(serde_json::Map::from_iter(object))
+    Value::Object(object)
 }
 
 /// A score or statistic in the JSON format: the text numberified, a number as
@@ -959,14 +955,12 @@ fn is_digits(s: &str) -> bool {
     !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
 }
 
-fn feature_type_key(tc: &TranscriptConsequence) -> String {
-    // `RegulatoryFeature` -> `regulatory_feature`, `MotifFeature` -> `motif_feature`.
-    tc.feature_type
-        .as_str()
-        .to_lowercase()
-        .replace("feature", "_feature")
-        .trim_start_matches('_')
-        .to_string()
+fn feature_type_key(tc: &TranscriptConsequence) -> &'static str {
+    match tc.feature_type {
+        FeatureType::Transcript => "transcript",
+        FeatureType::RegulatoryFeature => "regulatory_feature",
+        FeatureType::MotifFeature => "motif_feature",
+    }
 }
 
 /// VEP's JSON key for a field name: lowercased, then renamed where VEP renames
@@ -1267,7 +1261,7 @@ fn colocated_variant_object(
     allele_string: &str,
     groups: &FrequencyGroups,
 ) -> serde_json::Map<String, Value> {
-    let mut obj: IndexMap<String, Value> = IndexMap::new();
+    let mut obj: serde_json::Map<String, Value> = serde_json::Map::new();
     if let Some(chr) = &cv.chr {
         obj.insert("seq_region_name".to_string(), Value::String(chr.clone()));
     }
@@ -1322,9 +1316,9 @@ fn colocated_variant_object(
     for (column, value) in other_columns {
         obj.insert(column.clone(), numberify(column, value.clone()));
     }
-    let mut frequencies: IndexMap<String, Value> = IndexMap::new();
+    let mut frequencies: serde_json::Map<String, Value> = serde_json::Map::new();
     for row_allele in allele_string.split('/').skip(1) {
-        let mut by_population: IndexMap<String, Value> = IndexMap::new();
+        let mut by_population: serde_json::Map<String, Value> = serde_json::Map::new();
         for population in FREQ_FIELDS {
             if let Some(value) = frequency::reported_frequency(cv, population, row_allele, groups) {
                 by_population.insert(
@@ -1334,19 +1328,13 @@ fn colocated_variant_object(
             }
         }
         if !by_population.is_empty() {
-            frequencies.insert(
-                row_allele.to_string(),
-                Value::Object(serde_json::Map::from_iter(by_population)),
-            );
+            frequencies.insert(row_allele.to_string(), Value::Object(by_population));
         }
     }
     if !frequencies.is_empty() {
-        obj.insert(
-            "frequencies".to_string(),
-            Value::Object(serde_json::Map::from_iter(frequencies)),
-        );
+        obj.insert("frequencies".to_string(), Value::Object(frequencies));
     }
-    serde_json::Map::from_iter(obj)
+    obj
 }
 
 /// A `,`-split list field as the JSON factory writes it (OutputFactory/JSON.pm:469),
@@ -1371,14 +1359,14 @@ fn numberified_elements<'a>(elements: impl Iterator<Item = &'a str>) -> Value {
 /// the `,`-split ids of its second `::` field; a group without `::` holds no id,
 /// and a repeated source keeps its last group.
 fn var_synonyms_by_source(synonyms: &str) -> Value {
-    let mut by_source: IndexMap<String, Value> = IndexMap::new();
+    let mut by_source: serde_json::Map<String, Value> = serde_json::Map::new();
     for group in perl_split(synonyms, "--") {
         let mut parts = perl_split(&group, "::").into_iter();
         let source = parts.next().unwrap_or_default();
         let ids = perl_split(&parts.next().unwrap_or_default(), ",");
         by_source.insert(source, numberified_list(&ids));
     }
-    Value::Object(serde_json::Map::from_iter(by_source))
+    Value::Object(by_source)
 }
 
 /// Perl's list-context `split` on a literal separator: trailing empty fields are

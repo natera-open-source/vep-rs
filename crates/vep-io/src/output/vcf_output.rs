@@ -293,37 +293,28 @@ fn is_perl_whitespace(c: char) -> bool {
 /// one `_`. A control character that is not whitespace, which Ensembl VEP writes as it
 /// is, becomes its `%XX` percent-encoding, as the default and tab formats write
 /// it ([`fields::percent_encode_control_bytes`]).
-fn vcf_encode(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
+/// The escaped value is appended to `out`.
+fn vcf_encode(out: &mut Vec<u8>, value: &str) {
     let mut in_whitespace = false;
     for ch in value.chars() {
         let whitespace = is_perl_whitespace(ch);
         if whitespace {
             if !in_whitespace {
-                out.push('_');
+                out.push(b'_');
             }
         } else {
             match ch {
-                ';' => out.push_str("%3B"),
-                ',' | '|' => out.push('&'),
+                ';' => out.extend_from_slice(b"%3B"),
+                ',' | '|' => out.push(b'&'),
                 c if c.is_ascii_control() => {
-                    out.push_str(&format!("%{:02X}", c as u8));
+                    // Writing to a `Vec` cannot fail.
+                    let _ = write!(out, "%{:02X}", c as u8);
                 }
-                c => out.push(c),
+                c => out.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes()),
             }
         }
         in_whitespace = whitespace;
     }
-    out
-}
-
-pub(crate) fn value_for_field(
-    field: &str,
-    variant: &InputVariant,
-    tc: Option<&TranscriptConsequence>,
-    options: &FieldOptions,
-) -> String {
-    fields::field_value(field, variant, tc, options, "&")
 }
 
 /// One CSQ entry. A gene symbol's whitespace is percent-encoded before the
@@ -332,34 +323,40 @@ pub(crate) fn value_for_field(
 /// `BaseTranscriptVariationAllele_to_output_hash`, the `symbol` block). The
 /// `Allele` of a record on the reverse strand is reverse-complemented, whatever
 /// its text (`OutputFactory/VCF.pm:392-393`, `reverse_comp` on the value), so
-/// it names the allele as the record's VCF line does.
+/// it names the allele as the record's VCF line does. The entry is appended to
+/// `out`; `scratch` holds each subfield's value before it is escaped.
 fn format_csq_entry(
+    out: &mut Vec<u8>,
+    scratch: &mut Vec<u8>,
     fields: &[String],
     produced: &[bool],
     variant: &InputVariant,
     tc: Option<&TranscriptConsequence>,
     options: &FieldOptions,
-) -> String {
-    fields
-        .iter()
-        .zip(produced)
-        .map(|(field, produced)| {
-            if !produced {
-                return String::new();
-            }
-            let v = value_for_field(field, variant, tc, options);
-            if v == "-" && field != "Allele" {
-                String::new()
-            } else if field == "Allele" && variant.strand.as_i8() < 0 {
-                vcf_encode(&String::from_utf8_lossy(&reverse_complement(v.as_bytes())))
-            } else if field == "SYMBOL" && !options.no_escape {
-                vcf_encode(&v.replace(is_perl_whitespace, "%20"))
-            } else {
-                vcf_encode(&v)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("|")
+) {
+    for (k, (field, produced)) in fields.iter().zip(produced).enumerate() {
+        if k > 0 {
+            out.push(b'|');
+        }
+        if !produced {
+            continue;
+        }
+        scratch.clear();
+        fields::write_field_value(scratch, field, variant, tc, options, "&");
+        let v = String::from_utf8_lossy(scratch);
+        if v == "-" && field != "Allele" {
+            continue;
+        } else if field == "Allele" && variant.strand.as_i8() < 0 {
+            vcf_encode(
+                out,
+                &String::from_utf8_lossy(&reverse_complement(v.as_bytes())),
+            );
+        } else if field == "SYMBOL" && !options.no_escape {
+            vcf_encode(out, &v.replace(is_perl_whitespace, "%20"));
+        } else {
+            vcf_encode(out, &v);
+        }
+    }
 }
 
 /// Whether `allele` is one or more of the bases `A`, `C`, `G`, `T`, `N`
@@ -641,25 +638,34 @@ impl OutputFormatter for VcfOutputFormatter {
         let carried_without_csq = record
             .iter()
             .any(|v| v.vep_skip || v.oversize_sv || v.no_allele);
-        let csq_parts: Vec<String> = if carried_without_csq {
+        let rows = if carried_without_csq {
             Vec::new()
         } else {
             fields::record_rows(record)
-                .into_iter()
-                .map(|(variant, tc)| {
-                    format_csq_entry(&self.fields, &self.produced, variant, tc, &self.options)
-                })
-                .collect()
         };
         // A record with no consequences is carried through without the field, as
         // Ensembl VEP writes a record it annotates nothing for (OutputFactory/VCF.pm:341-353
         // appends the field only when there is a chunk and leaves `.` otherwise).
-        if !csq_parts.is_empty() {
+        if !rows.is_empty() {
             if !info.is_empty() {
                 info.push(b';');
             }
             info.extend_from_slice(csq_key.as_bytes());
-            info.extend_from_slice(csq_parts.join(",").as_bytes());
+            let mut scratch = Vec::new();
+            for (k, (variant, tc)) in rows.into_iter().enumerate() {
+                if k > 0 {
+                    info.push(b',');
+                }
+                format_csq_entry(
+                    &mut info,
+                    &mut scratch,
+                    &self.fields,
+                    &self.produced,
+                    variant,
+                    tc,
+                    &self.options,
+                );
+            }
         }
         if info.is_empty() {
             info.push(b'.');
@@ -678,6 +684,13 @@ mod tests {
     use super::*;
     use crate::output::fields::fixtures::edit_transcript;
     use smallvec::smallvec;
+
+    /// [`vcf_encode`]'s escaping of `value` alone.
+    fn encoded(value: &str) -> String {
+        let mut out = Vec::new();
+        vcf_encode(&mut out, value);
+        String::from_utf8(out).unwrap()
+    }
     use vep_core::consequence::{Consequence, FeatureType, Impact, TranscriptConsequence};
     use vep_core::transcript::Transcript;
 
@@ -1071,7 +1084,7 @@ mod tests {
             fields::field_value("ClinVar_FILTER", &variant, None, &formatter.options, "&"),
             "q10;s50"
         );
-        assert_eq!(vcf_encode("q10;s50"), "q10%3Bs50");
+        assert_eq!(encoded("q10;s50"), "q10%3Bs50");
     }
 
     /// A key one source declares as a field and as a statistic is two pairs
@@ -1343,22 +1356,22 @@ mod tests {
 
     #[test]
     fn test_vcf_encoding() {
-        assert_eq!(vcf_encode("a,b"), "a&b");
-        assert_eq!(vcf_encode("a;b"), "a%3Bb");
-        assert_eq!(vcf_encode("a|b"), "a&b");
-        assert_eq!(vcf_encode("a%b"), "a%b");
-        assert_eq!(vcf_encode("p.Pro336="), "p.Pro336=");
-        assert_eq!(vcf_encode("a b"), "a_b");
-        assert_eq!(vcf_encode("a\tb"), "a_b");
-        assert_eq!(vcf_encode("a \t b"), "a_b");
-        assert_eq!(vcf_encode(" \na\r\n"), "_a_");
-        assert_eq!(vcf_encode("a\x0B\x0Cb"), "a_b");
-        assert_eq!(vcf_encode("a\u{A0}b"), "a\u{A0}b");
-        assert_eq!(vcf_encode("normal"), "normal");
+        assert_eq!(encoded("a,b"), "a&b");
+        assert_eq!(encoded("a;b"), "a%3Bb");
+        assert_eq!(encoded("a|b"), "a&b");
+        assert_eq!(encoded("a%b"), "a%b");
+        assert_eq!(encoded("p.Pro336="), "p.Pro336=");
+        assert_eq!(encoded("a b"), "a_b");
+        assert_eq!(encoded("a\tb"), "a_b");
+        assert_eq!(encoded("a \t b"), "a_b");
+        assert_eq!(encoded(" \na\r\n"), "_a_");
+        assert_eq!(encoded("a\x0B\x0Cb"), "a_b");
+        assert_eq!(encoded("a\u{A0}b"), "a\u{A0}b");
+        assert_eq!(encoded("normal"), "normal");
         // A control character outside Perl's `\s` is percent-encoded; the
         // whitespace rule keeps the tab as `_`.
-        assert_eq!(vcf_encode("rs\x001\tx\x1Fy\x7F"), "rs%001_x%1Fy%7F");
-        assert_eq!(vcf_encode("a\u{85}b"), "a\u{85}b");
+        assert_eq!(encoded("rs\x001\tx\x1Fy\x7F"), "rs%001_x%1Fy%7F");
+        assert_eq!(encoded("a\u{85}b"), "a\u{85}b");
     }
 
     /// A CSQ value carrying a NUL, a tab and another control character is
@@ -1410,23 +1423,30 @@ mod tests {
         tc.feature_type = FeatureType::Transcript;
         tc.strand = 1;
         let fields = ["SYMBOL".to_string(), "SYMBOL_SOURCE".to_string()];
+        let entry = |options: &FieldOptions| {
+            let mut out = Vec::new();
+            format_csq_entry(
+                &mut out,
+                &mut Vec::new(),
+                &fields,
+                &[true, true],
+                &variant,
+                Some(&tc),
+                options,
+            );
+            String::from_utf8(out).unwrap()
+        };
         let escaped = FieldOptions {
             symbol: true,
             ..Default::default()
         };
-        assert_eq!(
-            format_csq_entry(&fields, &[true, true], &variant, Some(&tc), &escaped),
-            "MY%20GENE|HGNC_Symbol"
-        );
+        assert_eq!(entry(&escaped), "MY%20GENE|HGNC_Symbol");
         let plain = FieldOptions {
             symbol: true,
             no_escape: true,
             ..Default::default()
         };
-        assert_eq!(
-            format_csq_entry(&fields, &[true, true], &variant, Some(&tc), &plain),
-            "MY_GENE|HGNC_Symbol"
-        );
+        assert_eq!(entry(&plain), "MY_GENE|HGNC_Symbol");
     }
 
     #[test]
