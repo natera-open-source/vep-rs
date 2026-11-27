@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
+- Caches, reference FASTA and the cache tools
+  - `vep-cache-builder` reads the SIFT and PolyPhen matrix dump through the reader of every other table dump, still refusing a row that is not three columns.
+  - `vep-cache-builder` releases the transcript inputs and core dumps before writing variation files, which lowers that phase's resident memory 15% (2.08 to 1.77 GB, GRCh38 chr21 build); peak memory is unchanged. (#184)
+
 ## [1.0.0] - 2026-11-24
 
 ### Added

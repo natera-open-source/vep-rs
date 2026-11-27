@@ -25,17 +25,23 @@ use flate2::read::MultiGzDecoder;
 const MAX_ROW_BYTES: usize = 16 << 20;
 
 /// The kept values of one row.
-pub(crate) struct DumpRow<'a> {
+pub struct DumpRow<'a> {
     values: &'a [Vec<u8>],
     nulls: &'a [bool],
     /// The row's number in the file, from 1.
-    pub(crate) number: u64,
+    pub number: u64,
+    width: usize,
 }
 
 impl DumpRow<'_> {
     /// The value of the `nth` kept column, `None` for NULL.
-    pub(crate) fn value(&self, nth: usize) -> Option<&[u8]> {
+    pub fn value(&self, nth: usize) -> Option<&[u8]> {
         (!self.nulls[nth]).then(|| self.values[nth].as_slice())
+    }
+
+    /// The number of columns the row holds, which may pass the schema's.
+    pub fn width(&self) -> usize {
+        self.width
     }
 }
 
@@ -48,6 +54,17 @@ pub(crate) fn read_rows(
     path: &Path,
     columns: usize,
     keep: &[usize],
+    row: impl FnMut(&DumpRow<'_>) -> Result<()>,
+) -> Result<u64> {
+    read_rows_up_to(path, columns, keep, MAX_ROW_BYTES, row)
+}
+
+/// `read_rows` with a row cap of `max_row_bytes` in place of 16 MiB.
+pub fn read_rows_up_to(
+    path: &Path,
+    columns: usize,
+    keep: &[usize],
+    max_row_bytes: usize,
     mut row: impl FnMut(&DumpRow<'_>) -> Result<()>,
 ) -> Result<u64> {
     let file =
@@ -159,6 +176,7 @@ pub(crate) fn read_rows(
                         values: &values,
                         nulls: &nulls,
                         number: row_number,
+                        width: column + 1,
                     })?;
                     for value in &mut values {
                         value.clear();
@@ -171,9 +189,9 @@ pub(crate) fn read_rows(
                 }
             }
         }
-        if row_bytes > MAX_ROW_BYTES {
+        if row_bytes > max_row_bytes {
             bail!(
-                "{} row {row_number} is longer than the {MAX_ROW_BYTES}-byte limit for one row",
+                "{} row {row_number} is longer than the {max_row_bytes}-byte limit for one row",
                 path.display()
             );
         }

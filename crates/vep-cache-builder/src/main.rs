@@ -82,8 +82,8 @@ use tracing::{info, warn};
 use vep_core::stderr;
 
 use vep_cache_builder::{
-    builder, core_dumps, count, fasta, fasta_index, gff3, gtf, info, regulatory, variant_cells,
-    variation,
+    builder, core_dumps, count, dump_rows, fasta, fasta_index, gff3, gtf, info, regulatory,
+    variant_cells, variation,
 };
 
 mod download;
@@ -870,6 +870,21 @@ pub fn build(inputs: &BuildInputs, output_dir: &Path) -> Result<Built> {
         counted(stats.chromosome_count, "chromosome"),
         counted(stats.region_file_count, "region file")
     );
+    // The transcript phase's inputs are released before the regulatory and
+    // variation phases; of the core dumps only what `info.json` prints is kept.
+    let core_source_versions = core_dumps
+        .as_ref()
+        .map(|d| d.source_versions())
+        .unwrap_or_default();
+    let karyotype_ranks = core_dumps
+        .as_ref()
+        .map(|dumps| dumps.karyotype_ranks().clone());
+    let core_dumps_read = core_dumps.is_some();
+    drop(core_dumps);
+    drop(genes);
+    drop(protein_sequences);
+    drop(prediction_data);
+    drop(gtf_tags);
 
     let regulatory_tree = match &inputs.regulatory {
         Some(regulatory) => Some(
@@ -894,10 +909,7 @@ pub fn build(inputs: &BuildInputs, output_dir: &Path) -> Result<Built> {
 
     // Source versions the output headers print: the core `meta` table's, as
     // Ensembl VEP's own cache info carries them, else the GTF header's.
-    let mut source_versions = core_dumps
-        .as_ref()
-        .map(|d| d.source_versions())
-        .unwrap_or_default();
+    let mut source_versions = core_source_versions;
     if let Some(header) = &gtf_header {
         if let Some(v) = header.get("genome-build") {
             source_versions
@@ -924,7 +936,7 @@ pub fn build(inputs: &BuildInputs, output_dir: &Path) -> Result<Built> {
     let left = left_out::of(&left_out::Build {
         species: &inputs.species,
         assembly: &inputs.assembly,
-        core_dumps: core_dumps.is_some(),
+        core_dumps: core_dumps_read,
         reading,
         unnamed_translations: stats.unnamed_translations,
         variation: variation_cols.is_some(),
@@ -962,7 +974,7 @@ pub fn build(inputs: &BuildInputs, output_dir: &Path) -> Result<Built> {
         &stats,
         variation_cols,
         source_versions,
-        core_dumps.as_ref().map(|dumps| dumps.karyotype_ranks()),
+        karyotype_ranks.as_ref(),
     )
     .with_regulatory(inputs.regulatory.is_some())
     .with_cell_types(
