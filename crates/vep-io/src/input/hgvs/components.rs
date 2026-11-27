@@ -178,10 +178,10 @@ pub(super) fn genome_on_strand(
 ) -> Result<Vec<u8>, String> {
     let (low, high) = (start.min(end), start.max(end));
     let no_bases = || format!("The reference FASTA has no bases at {reference_name}:{low}-{high}");
-    let genome = match u64::try_from(low) {
-        Ok(low) if low >= 1 => reference
-            .sequence(chr, low, high as u64)
-            .ok_or_else(no_bases)?,
+    let genome = match (u64::try_from(low), u64::try_from(high)) {
+        (Ok(low), Ok(high)) if low >= 1 => {
+            reference.sequence(chr, low, high).ok_or_else(no_bases)?
+        }
         _ => return Err(no_bases()),
     };
     Ok(match strand {

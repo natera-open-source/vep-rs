@@ -1195,6 +1195,13 @@ pub(super) mod tests {
         }
         let far = refused("ENST00000000001:c.1+9223372036854775807A>G");
         assert!(far.contains("The reference FASTA has no bases at"), "{far}");
+        // The span's end is 2^64 + 130, past `u64`, so a forward duplication
+        // reads no bases rather than the 121-130 a wrapped end would name.
+        let wrapped = refused("ENST00000000001:c.1_9223372036854775739+9223372036854775807dup");
+        assert!(
+            wrapped.contains("The reference FASTA has no bases at"),
+            "{wrapped}"
+        );
         let across = read("ENST00000000001:c.100_101del").remove(0).unwrap();
         assert_eq!(
             (across.start, across.end, across.ref_allele.len()),
