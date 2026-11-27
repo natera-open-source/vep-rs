@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Command line, configuration and errors
+  - The refusal of an input whose format cannot be detected, a header-only VCF among them, names `--format`, and `--format vcf` for a VCF with no records. (#160)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 

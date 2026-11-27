@@ -62,7 +62,7 @@ vep-rs takes the same input files and flag names as Ensembl VEP and writes the s
 
 `--format` takes `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region` and `guess`:
 
-- `guess` detects the first data line.
+- `guess` detects the first data line, so a file that may hold none, such as an empty call set's VCF, is read with `--format vcf`.
 - HGVS genomic, transcript and protein input resolves against `--fasta` and the transcript cache.
 - Region and SPDI input also need `--fasta`.
 - Identifier lists resolve against cache variation files and are refused without them.

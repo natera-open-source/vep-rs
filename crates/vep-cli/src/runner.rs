@@ -3431,8 +3431,12 @@ impl Runner {
                     }
                 })?;
                 reader = Box::new(Cursor::new(detection.consumed).chain(reader));
+                // Ensembl VEP's text (Parser.pm:151) with the flag that reads a
+                // file holding no data line, a header-only VCF among them.
                 let Some(format) = detection.format else {
-                    return Err(input_error("Can't detect input format"));
+                    return Err(input_error(
+                        "Can't detect input format (see --format; a VCF with no records needs --format vcf)",
+                    ));
                 };
                 debug!("No input file format specified - detected {format} format");
                 (format, detection.delimiter)

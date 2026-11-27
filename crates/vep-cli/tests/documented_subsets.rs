@@ -3145,7 +3145,7 @@ fn exit_status_table_rows_name_the_faults_their_components_end_a_run_on() {
     let no_data_line = write("empty.txt", b"");
     refusals.push(refused(
         run_reading(&cache, &text(&no_data_line), &["--no_fasta"], &[]),
-        "ERROR: [input] Can't detect input format".to_string(),
+        "ERROR: [input] Can't detect input format (see --format; a VCF with no records needs --format vcf)".to_string(),
     ));
     let malformed_block = fixture("malformed/bgzf_isize_over_limit.vcf.gz");
     refusals.push(refused(

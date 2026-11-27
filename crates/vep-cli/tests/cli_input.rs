@@ -534,8 +534,8 @@ fn format_is_detected_from_the_first_data_line() {
 }
 
 /// An input whose first data line is of no known shape, or that has no data
-/// line at all, is refused with Ensembl VEP's text (Parser.pm:150) before any
-/// output is written.
+/// line at all, is refused with Ensembl VEP's text (Parser.pm:151), and a
+/// pointer to `--format`, before any output is written.
 #[test]
 fn undetectable_input_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -547,7 +547,7 @@ fn undetectable_input_is_refused() {
         let path = write(dir.path(), name, text.as_bytes());
         let out = output_path(dir.path());
         let output = vep(&["-i", path.to_str().unwrap()], &out, &[]);
-        assert_refused(&output, "ERROR: [input] Can't detect input format");
+        assert_refused(&output, "ERROR: [input] Can't detect input format (see --format; a VCF with no records needs --format vcf)");
         assert!(!out.exists(), "{name}: no output for a refused input");
         // Named, the format reads the same file.
         let output = vep(&["-i", path.to_str().unwrap()], &out, &["--format", "vcf"]);
