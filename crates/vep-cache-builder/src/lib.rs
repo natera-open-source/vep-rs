@@ -24,7 +24,8 @@ pub mod builder;
 pub mod core_dumps;
 #[doc(hidden)]
 pub mod count;
-mod dump_rows;
+#[doc(hidden)]
+pub mod dump_rows;
 #[doc(hidden)]
 pub mod fasta;
 #[doc(hidden)]

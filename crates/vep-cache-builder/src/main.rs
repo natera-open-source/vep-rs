@@ -82,8 +82,8 @@ use tracing::{info, warn};
 use vep_core::stderr;
 
 use vep_cache_builder::{
-    builder, core_dumps, count, fasta, fasta_index, gff3, gtf, info, regulatory, variant_cells,
-    variation,
+    builder, core_dumps, count, dump_rows, fasta, fasta_index, gff3, gtf, info, regulatory,
+    variant_cells, variation,
 };
 
 mod download;
