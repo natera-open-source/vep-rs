@@ -3198,6 +3198,36 @@ fn added_bases_takes_the_notation_carried_along_a_run_and_nothing_wider() {
     ));
 }
 
+/// A VCF or JSON entry carries its Location as `allele_location` alone; the class reads it
+/// there as it reads a default row's Location column.
+#[test]
+fn added_bases_reads_a_row_at_the_location_its_record_gives_its_allele() {
+    let cell = (
+        ADDED_CARRIED_REFERENCES[0],
+        ADDED_CARRIED_ENGINES[0],
+        Some("moved"),
+        "-1",
+        false,
+        true,
+    );
+    let (reference, engine) = added_carried_rows(&cell, 0);
+    let unplaced = |row: &str| -> Row {
+        let e = entry(row);
+        Rc::new(Entry {
+            location: None,
+            allele_location: e.location.clone(),
+            ..Entry::clone(&e)
+        })
+    };
+    let (e, a) = (unplaced(&reference), unplaced(&engine));
+    assert!(field_verdict(ADDED_BASES, &e, &a, "HGVSc"));
+    let nowhere = Rc::new(Entry {
+        allele_location: None,
+        ..Entry::clone(&e)
+    });
+    assert!(!field_verdict(ADDED_BASES, &nowhere, &a, "HGVSc"));
+}
+
 /// A default-format row without the plugin's two fields.
 fn without_plugin_fields(row: &str) -> String {
     let (columns, extra) = row.rsplit_once('\t').unwrap();

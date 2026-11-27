@@ -18,6 +18,7 @@ use vep_formats_compare::parse::json::parse_json;
 use vep_formats_compare::parse::text::{parse_default, parse_tab};
 use vep_formats_compare::parse::vcf::parse_vcf;
 use vep_formats_compare::pyjson::{self, DumpOptions, Value};
+use vep_formats_compare::rules::added_bases;
 use vep_formats_compare::rules::downstream::field_of;
 use vep_formats_compare::rules::record_alleles::vcf_alleles_as_spelt;
 use vep_formats_compare::rules::{field_class_accepts, RuleContext, Side};
@@ -1249,5 +1250,33 @@ fn a_dup_that_counts_no_bases_reads_the_distance_from_the_alleles_where_a_row_ca
             };
             assert_eq!(sets_the_row_aside(&e, &a), *expected, "{form} {label}");
         }
+    }
+}
+
+/// The record `chr16 15725140 AA A,AAA` on a forward-strand transcript whose
+/// last exon ends inside the run: the reference's `c.*890dup` and the candidate's `c.*898dup`
+/// carried 8 bases, read as VCF entries, which carry their Location as `allele_location` alone.
+#[test]
+fn added_bases_carried_along_a_run_reads_a_vcf_entry_at_its_records_location() {
+    let line = "chr16\t15725140\tend_run\tAA\tA,AAA\t.\tPASS\t.".to_string();
+    let output = |hgvsc: &str, offset: &str| -> Entry {
+        let header = "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|Feature_type|Feature|HGVSc|STRAND|HGVS_OFFSET\">\n";
+        let text = format!(
+            "{header}#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{}CSQ=AA|3_prime_UTR_variant|Transcript|ENST00000911229|ENST00000911229.1:{hgvsc}|1|{offset}\n",
+            &line[..line.len() - 1]
+        );
+        parse_vcf(&text, std::slice::from_ref(&line))
+            .expect("the text parses")
+            .pop()
+            .expect("the CSQ entry follows the record's")
+    };
+    let (reference, candidate) = (output("c.*890dup", ""), output("c.*898dup", "8"));
+    assert_eq!(reference.location, None);
+    for field in ["HGVSc", "HGVS_OFFSET"] {
+        assert!(
+            added_bases::added_bases_left_at_the_span_end(&reference, Some(&candidate), field)
+                .expect("the rule reads the pair"),
+            "{field}"
+        );
     }
 }

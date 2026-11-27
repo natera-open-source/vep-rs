@@ -1274,7 +1274,8 @@ pub fn added_bases_left_at_the_span_end(
     actual: Option<&Entry>,
     name: &str,
 ) -> Res<bool> {
-    let (Some(actual), Some(location)) = (actual, e.location.as_deref()) else {
+    let location = e.location.as_deref().or(e.allele_location.as_deref());
+    let (Some(actual), Some(location)) = (actual, location) else {
         return Ok(false);
     };
     if !is_bases(&e.allele) {

@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
+### Fixed
+
+- Documentation, test corpora and comparison tools
+  - `hgvs_added_bases_left_at_the_span_end` in `vep-formats-compare` and `vep-plugin-pairs` reads a VCF or JSON row at its record's Location, so it sets aside those rows too. (#174)
+
 ## [1.0.0] - 2026-11-24
 
 ### Added
