@@ -34,6 +34,8 @@ use crate::shared::gvcf_site_rows;
 use crate::shared::is_structural_allele;
 use crate::shared::perl_fields;
 use crate::shared::perl_split;
+use crate::stream::lines::lines;
+use crate::stream::source::{Buffers, Source, BLOCK};
 use indexmap::IndexMap;
 use number::minus;
 use number::plus;
@@ -642,30 +644,127 @@ fn vcf_text(path: &Path) -> std::io::Result<String> {
 /// The error is the `OSError` of a file that cannot be opened or read.
 pub fn parse_vcf(path: &Path) -> std::io::Result<Vec<VcfVariant>> {
     let text = vcf_text(path)?;
-    let mut variants = Vec::new();
-    for line in text.split('\n') {
-        if line.starts_with('#') {
-            continue;
-        }
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 5 {
-            continue;
-        }
-        let (chrom, pos_str, vid, r#ref, alt) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
-        let pos = perl_pos(pos_str);
-        variants.push(VcfVariant {
-            chrom: chrom.to_string(),
-            pos,
-            vid: vid.to_string(),
-            r#ref: r#ref.to_string(),
-            alt: alt.to_string(),
-            variant_type: classify_variant(r#ref, alt),
-            location: normalize_location(&format!("{chrom}:{pos}")),
-            info: parts.get(7).copied().unwrap_or_default().to_string(),
-            pos_text: Some(pos_str.to_string()),
-        });
+    Ok(text
+        .split('\n')
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(vcf_variant)
+        .collect())
+}
+
+/// The record of one data line of the input; `None` for a line of fewer than five columns.
+fn vcf_variant(line: &str) -> Option<VcfVariant> {
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() < 5 {
+        return None;
     }
-    Ok(variants)
+    let (chrom, pos_str, vid, r#ref, alt) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
+    let pos = perl_pos(pos_str);
+    Some(VcfVariant {
+        chrom: chrom.to_string(),
+        pos,
+        vid: vid.to_string(),
+        r#ref: r#ref.to_string(),
+        alt: alt.to_string(),
+        variant_type: classify_variant(r#ref, alt),
+        location: normalize_location(&format!("{chrom}:{pos}")),
+        info: parts.get(7).copied().unwrap_or_default().to_string(),
+        pos_text: Some(pos_str.to_string()),
+    })
+}
+
+/// Each data line of the input with its ordinal, counted from 0 as the stream counts them
+/// (`stream::Plan::force_records`): the lines the stream's own blocks cut, every line that
+/// does not open with `#`, read once without holding the file.
+fn each_input_record(input: &Path, mut each: impl FnMut(u64, &str)) -> crate::error::Result<()> {
+    let source = Source::open(input)?;
+    let buffers = Buffers::new(BLOCK);
+    let mut blocks = source.blocks(&buffers)?;
+    let mut ordinal = 0u64;
+    while let Some(block) = blocks.next().map_err(|detail| source.failed(&detail))? {
+        let bytes = block.bytes();
+        for line in lines(bytes) {
+            let line = &bytes[line];
+            if line.first() != Some(&b'#') {
+                each(ordinal, &String::from_utf8_lossy(line));
+                ordinal += 1;
+            }
+        }
+        buffers.give(block.into_buffer());
+    }
+    Ok(())
+}
+
+/// The chromosome of a record and the lowest and highest coordinate its rows can name.
+fn record_reach(v: &VcfVariant) -> (String, Int, Int) {
+    let (_chrom, start, end) = record_location(v);
+    let (mut lo, mut hi) = (start.min(end).min(v.pos), start.max(end).max(v.pos));
+    for (_allele, start, end) in site_rows(v) {
+        (lo, hi) = (lo.min(start.min(end)), hi.max(start.max(end)));
+    }
+    (record_chromosome(v).to_string(), lo, hi)
+}
+
+/// The ordinals of the input's data lines whose groups the classes that read across records
+/// must see: a record the reference may skip (`perl_skip_route`) under
+/// `reference_skipped_record`, a breakend (a bracket, `<BND>`, a single breakend, or
+/// `SVTYPE=BND`, whose rows carry bracket mates) under `breakend_mate_local_read` or
+/// `bnd_own_chromosome_rows_lost`, and every record whose span lies within two bases of one
+/// of those, whose rows those classes read beside it (the rivals at a start of
+/// `skipped_record_rows`, the tuples at a Location of the two breakend classes). The rest
+/// of a file's groups are touched by none of them. The input is read twice, the second time
+/// only where it holds such a record.
+pub fn records_read_across(
+    input: &Path,
+    skipped: bool,
+    breakends: bool,
+    max_sv_size: i64,
+) -> crate::error::Result<Vec<u64>> {
+    let mut seeds: IndexMap<String, Vec<(Int, Int)>> = IndexMap::new();
+    each_input_record(input, |_, line| {
+        let Some(v) = vcf_variant(line) else {
+            return;
+        };
+        let breakend = v.variant_type == "BND"
+            || v.alt.contains(['[', ']'])
+            || v.info.split(';').any(|item| item == "SVTYPE=BND");
+        if (skipped && perl_skip_route(&v, max_sv_size).is_some()) || (breakends && breakend) {
+            let (chrom, lo, hi) = record_reach(&v);
+            seeds
+                .entry(chrom)
+                .or_default()
+                .push((minus(lo, 2), plus(hi, 2)));
+        }
+    })?;
+    if seeds.is_empty() {
+        return Ok(Vec::new());
+    }
+    // The seeds' spans merged per chromosome, so that one search finds a record's.
+    for merged in seeds.values_mut() {
+        merged.sort_unstable();
+        let mut joined: Vec<(Int, Int)> = Vec::new();
+        for (lo, hi) in merged.drain(..) {
+            match joined.last_mut() {
+                Some(last) if lo <= last.1 => last.1 = last.1.max(hi),
+                _ => joined.push((lo, hi)),
+            }
+        }
+        *merged = joined;
+    }
+    let mut read = Vec::new();
+    each_input_record(input, |ordinal, line| {
+        let Some(v) = vcf_variant(line) else {
+            return;
+        };
+        let (chrom, lo, hi) = record_reach(&v);
+        let beside = seeds.get(&chrom).is_some_and(|merged| {
+            let at = merged.partition_point(|span| span.1 < lo);
+            merged.get(at).is_some_and(|span| span.0 <= hi)
+        });
+        if beside {
+            read.push(ordinal);
+        }
+    })?;
+    Ok(read)
 }
 
 /// A transcript's `stable_id` as a key of the cache's views: a text, or a number by its
@@ -1833,6 +1932,82 @@ pub fn filter_bnd_own_rows_lost(
             };
             let reach = Int::from(_BREAKEND_FEATURE_DISTANCE);
             if minus(span.1, reach) <= pos && pos <= plus(span.2, reach) {
+                excluded.insert((*t).clone());
+            }
+        }
+    }
+    excluded
+}
+
+/// A bracket breakend's mate rows lost to a mate chromosome spelled in a way the reference
+/// does not resolve (`tools/vep-sv-compare`'s `filter_bnd_synonym_mate_rows`).
+///
+/// THE SHAPE. The reference strips a lower-case `chr` from the mate's name and keeps any other
+/// spelling (StructuralVariationOverlap.pm 116:86-103), so `[CHR17:7675000[` or `Chr21` names
+/// no chromosome of the cache; `_close_to_feature`'s name test (Utils/VariationEffect.pm
+/// 116:111-124) then refuses every transcript of the mate, and the reference writes no mate
+/// row. Where the record's own end reaches no transcript either, it writes no CSQ at all. The
+/// candidate resolves the name through the synonym table and writes the mate rows.
+///
+/// THE PREDICATE: a candidate-only Transcript tuple under a bracket allele the reference wrote
+/// no tuple under at the Location, whose mate name as the reference reads it is no chromosome
+/// of the cache. Where the reference wrote a tuple at the Location, the transcript is on the
+/// chromosome the candidate resolved the mate to or, for a name the cache files nowhere, not
+/// on the Location's own chromosome. Where it wrote none, the transcript is on the mate's
+/// chromosome within `_BREAKEND_FEATURE_DISTANCE` of the mate (StructuralVariationOverlap.pm
+/// 116:144-160). With no cache it excludes nothing.
+pub fn filter_bnd_synonym_mate_rows(
+    perl_tuples: &BTreeSet<AnnotTuple>,
+    rust_tuples: &BTreeSet<AnnotTuple>,
+    transcripts_by_chr: &IndexMap<String, BTreeSet<StableId>>,
+    transcript_spans: &IndexMap<(String, StableId), TranscriptSpan>,
+) -> BTreeSet<AnnotTuple> {
+    let mut excluded: BTreeSet<AnnotTuple> = BTreeSet::new();
+    if transcripts_by_chr.is_empty() {
+        return excluded;
+    }
+    let perl_by_loc = by_location(perl_tuples.iter());
+    let no_tuples = Vec::new();
+    for (loc, rust_here) in &by_location(one_sided(rust_tuples, perl_tuples)) {
+        let Some(own) = _chromosome_of_location(loc) else {
+            continue;
+        };
+        let perl_here = perl_by_loc.get(loc).unwrap_or(&no_tuples);
+        for t in rust_here {
+            let Some((mate, mate_pos)) = _bracket_mate(&t.1) else {
+                continue;
+            };
+            let resolved = _BRACKET_MATE_RE
+                .captures(&t.1)
+                .map(|found| {
+                    found[1]
+                        .strip_prefix("chr")
+                        .unwrap_or(&found[1])
+                        .to_string()
+                })
+                .is_some_and(|name| transcripts_by_chr.contains_key(&name));
+            if resolved || t.2 == "-" || perl_here.iter().any(|p| p.1 == t.1) {
+                continue;
+            }
+            let id = StableId::text(&t.2);
+            let on = |chrom: &str| {
+                transcripts_by_chr
+                    .get(chrom)
+                    .is_some_and(|ids| ids.contains(&id))
+            };
+            let lost = if perl_here.is_empty() {
+                let reach = Int::from(_BREAKEND_FEATURE_DISTANCE);
+                transcript_spans
+                    .get(&(mate.clone(), id.clone()))
+                    .is_some_and(|span| {
+                        minus(span.1, reach) <= mate_pos && mate_pos <= plus(span.2, reach)
+                    })
+            } else if transcripts_by_chr.contains_key(&mate) {
+                on(&mate)
+            } else {
+                !on(&own)
+            };
+            if lost {
                 excluded.insert((*t).clone());
             }
         }

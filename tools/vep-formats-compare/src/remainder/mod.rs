@@ -27,6 +27,10 @@
 use crate::classes;
 use crate::classes::CONSERVATION_SHORT_NAME_SPELLING;
 use crate::classes::REGULATORY_FEATURE_ROWS;
+use crate::classes::{
+    BND_OWN_CHROMOSOME_ROWS_LOST, BREAKEND_MATE_LOCAL_READ, REFERENCE_SKIPPED_RECORD,
+};
+use crate::compare::MAX_SV_SIZE;
 use crate::consts::JSON_CONSEQUENCE_LISTS;
 use crate::consts::MISSPELT_CONSERVATION_KEY;
 use crate::consts::REGULATORY_KINDS;
@@ -36,6 +40,7 @@ use crate::error::Result;
 use crate::floors::json_floor_fields;
 use crate::manifest::Documented;
 use crate::pyfmt;
+use crate::rules::structural::records_read_across;
 use crate::shared::feature_kind;
 use crate::stream;
 use crate::stream::Output;
@@ -311,6 +316,14 @@ fn canonical_order(mut kept: KeptBack) -> KeptBack {
     kept
 }
 
+/// The classes of `FRONT_END_WHOLE_CLASSES` whose rows a VCF or JSON comparison with the
+/// input hands over by record (`records_read_across`) instead of comparing the whole outputs.
+const RECORD_READ_CLASSES: [&str; 3] = [
+    REFERENCE_SKIPPED_RECORD,
+    BREAKEND_MATE_LOCAL_READ,
+    BND_OWN_CHROMOSOME_ROWS_LOST,
+];
+
 /// `hand_over` of two outputs that are each a file or a written text.
 #[allow(clippy::too_many_arguments)]
 fn hand_over_outputs(
@@ -332,7 +345,12 @@ fn hand_over_outputs(
         classes::tables()
             .front_end_whole_classes()
             .iter()
-            .find(|k| documented.masks.contains(**k))
+            .find(|k| {
+                documented.masks.contains(**k)
+                    && !(FRONT_END_RECORD_FORMATS.contains(&fmt)
+                        && records_path.is_some()
+                        && RECORD_READ_CLASSES.contains(*k))
+            })
             .map(|k| (*k).to_string())
     };
     let by_record = FRONT_END_RECORD_FORMATS.contains(&fmt);
@@ -390,6 +408,17 @@ fn hand_over_outputs(
             .into_iter()
             .filter_map(|ordinal| u64::try_from(ordinal).ok())
             .collect();
+        // The groups a class that reads across records can touch are handed over, the rest
+        // streamed (`records_read_across`).
+        let masked = |klass: &str| documented.masks.contains(klass);
+        let (skipped, breakends) = (
+            masked(REFERENCE_SKIPPED_RECORD),
+            masked(BREAKEND_MATE_LOCAL_READ) || masked(BND_OWN_CHROMOSOME_ROWS_LOST),
+        );
+        if let Some(input) = records_path.filter(|_| skipped || breakends) {
+            let read = records_read_across(input, skipped, breakends, MAX_SV_SIZE)?;
+            force_records.extend(read);
+        }
     } else {
         let locations = documented
             .by_location

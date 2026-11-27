@@ -768,6 +768,47 @@ fn a_mate_side_row_read_at_the_local_coordinate_is_set_aside_as_a_pair() {
     );
 }
 
+/// A mate spelled `CHR22` names no chromosome to the reference (StructuralVariationOverlap.pm
+/// :86-103), so it writes no mate row, and where the own end reaches no transcript it writes
+/// no CSQ at all, as for `chr13 31613634 C C[CHR17:7675000[`. A candidate-only mate row of
+/// a transcript on the mate's chromosome within 5,000 bases of the mate is the class, and the
+/// record's CSQ_present is left uncompared; a mate the reference resolves, a transcript
+/// farther from the mate stay differences.
+#[test]
+fn the_mate_rows_of_a_record_the_reference_wrote_no_csq_for_are_set_aside() {
+    let directory = scratch("structural-synonym-mate");
+    let csq_header = "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. \
+                      Format: Allele|Consequence|Feature_type|Feature|DISTANCE\">\n";
+    let cache = breakend_cache(&directory.join("cache"));
+    let judged = |mate: &str| -> (String, std::collections::BTreeMap<String, i64>) {
+        let record = format!("21\t150000\tbnd3\tN\tN{mate}\t.\t.\tSVTYPE=BND");
+        let vcf_input = structural_input(&directory.join("in.vcf"), &[record.as_str()]);
+        let inputs = whole_records(&vcf_input);
+        let side = side_of(structural(&[OWN_ROWS], Some(&vcf_input), Some(&cache)));
+        let line = &inputs[0];
+        let mut documented = documented_with(&[OWN_ROWS]);
+        let report = compare_beside(
+            &side,
+            &parse_vcf(&format!("{csq_header}{line}\n"), &inputs).expect("the reference parses"),
+            &parse_vcf(
+                &format!(
+                    "{csq_header}{line};CSQ=N{mate}|upstream_gene_variant|Transcript|ENST22|100\n"
+                ),
+                &inputs,
+            )
+            .expect("the candidate parses"),
+            &mut documented,
+        );
+        (verdict(&report).to_string(), applied(&documented))
+    };
+    assert_eq!(
+        judged("[CHR22:5000000["),
+        ("green".to_string(), count_map(&[(OWN_ROWS, 1)]))
+    );
+    assert_eq!(judged("[chr22:5000000[").0, "red");
+    assert_eq!(judged("[CHR22:4990000[").0, "red");
+}
+
 /// A mate-chromosome transcript names the record's slice first (AnnotationType/Transcript.pm
 /// :122) and every own-chromosome transcript fails the slice test (:125-143), so the
 /// reference keeps the mate rows and writes nothing under the own-end allele: a
@@ -1095,5 +1136,169 @@ fn the_comparisons_outside_the_stream_are_made_on_the_whole_outputs() {
     assert_eq!(
         FrontEnd::new(STREAM).note,
         "the whole outputs were compared: only a default, tab, vcf, json or parquet comparison is handed over"
+    );
+}
+
+/// A VCF comparison with the input under the classes that read across records streams the
+/// outputs and hands over only the groups they can touch: a record the reference may skip
+/// (`<CPX>`, which the reference writes no line for), a record within its span, and a
+/// bracket breakend. The plain records before and after are kept back, and the report, the standard output and the exit code are those of
+/// the whole outputs.
+#[test]
+fn the_classes_that_read_across_records_hand_over_only_the_groups_they_touch() {
+    let directory = scratch("structural-read-across");
+    let records = [
+        "21\t1000\ts1\tA\tG\t.\t.\t.",
+        "21\t5000\tskip\tN\t<CPX>\t.\t.\tSVTYPE=CPX;END=5100",
+        "21\t5050\tbeside\tA\tT\t.\t.\t.",
+        "21\t100000\tbnd1\tN\tN[22:5000000[\t.\t.\tSVTYPE=BND",
+        "21\t200000\tfar\tC\tT\t.\t.\t.",
+    ];
+    let input = structural_input(&directory.join("in.vcf"), &records);
+    let cache = breakend_cache(&directory.join("cache"));
+    let header = "##fileformat=VCFv4.2\n##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. \
+                  Format: Allele|Consequence|Feature_type|Feature\">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+    let line = |record: &str, csq: &str| {
+        let (columns, _) = record.rsplit_once('\t').expect("an INFO column");
+        format!("{columns}\tCSQ={csq}\n")
+    };
+    let rows = [
+        "G|intron_variant|Transcript|ENST1",
+        "",
+        "T|intron_variant|Transcript|ENST1",
+        "N[22:5000000[|upstream_gene_variant|Transcript|ENST22",
+        "T|intergenic_variant||",
+    ];
+    let output = |skipped_rows: bool| {
+        let mut text = header.to_string();
+        for (record, csq) in records.iter().zip(rows) {
+            match (csq.is_empty(), skipped_rows) {
+                (true, false) => {}
+                (true, true) => text.push_str(&format!(
+                    "{record};CSQ=<CPX>|intron_variant|Transcript|ENST1\n"
+                )),
+                _ => text.push_str(&line(record, csq)),
+            }
+        }
+        text
+    };
+    let expected = directory.join("expected.vcf");
+    let actual = directory.join("actual.vcf");
+    std::fs::write(&expected, output(false)).expect("the reference is written");
+    std::fs::write(&actual, output(true)).expect("the candidate is written");
+    let masks = [SKIPPED, MATE_READ, OWN_ROWS].join(",");
+    let mut seen = Vec::new();
+    for whole in [true, false] {
+        let report = directory.join(format!("report.{whole}.json"));
+        let ran = run(
+            &[
+                "--format",
+                "vcf",
+                "--expected",
+                path_text(&expected),
+                "--actual",
+                path_text(&actual),
+                "--input",
+                path_text(&input),
+                "--json-cache",
+                path_text(&cache),
+                "--masks",
+                &masks,
+                "--report",
+                path_text(&report),
+            ],
+            whole,
+        );
+        seen.push((std::fs::read(&report).ok(), ran.out, ran.code, ran.err));
+    }
+    let (handed, whole) = (seen.pop().expect("two runs"), seen.pop().expect("two runs"));
+    assert_eq!(
+        (&handed.0, &handed.1, handed.2),
+        (&whole.0, &whole.1, whole.2),
+        "{}",
+        handed.3
+    );
+    assert_eq!(handed.1, "vcf: green\n");
+    let mut front_end = FrontEnd::new(STREAM);
+    hand_over(
+        &mut front_end,
+        "vcf",
+        &expected,
+        &actual,
+        &documented_with(&[SKIPPED, MATE_READ, OWN_ROWS]),
+        false,
+        None,
+        &[],
+        Some(&input),
+    )
+    .expect("the outputs are read");
+    assert_eq!(
+        front_end.note,
+        format!(
+            "2 of 4 reference lines were kept back by {STREAM}, 3 of 5 record groups handed over"
+        )
+    );
+}
+
+/// A breakend whose ALT holds no bracket, `<BND>` with INFO/CHR2 and END2, writes bracket
+/// mate rows all the same, so the stream hands it over with its neighbours: the single
+/// breakend at its coordinate, whose own-end row the reference kept, keeps the candidate's
+/// own-end row of the `<BND>` record a difference, as on the whole outputs.
+#[test]
+fn a_symbolic_breakend_hands_over_the_records_beside_it() {
+    let directory = scratch("structural-symbolic-breakend");
+    let records = [
+        "21\t100000\tdot\tN\tN.\t.\t.\tSVTYPE=BND",
+        "21\t100000\tsym\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=22;END2=5000000",
+    ];
+    let input = structural_input(&directory.join("in.vcf"), &records);
+    let cache = breakend_cache(&directory.join("cache"));
+    let header = "##fileformat=VCFv4.2\n##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. \
+                  Format: Allele|Consequence|Feature_type|Feature\">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+    let dot = format!(
+        "{};CSQ=N.|upstream_gene_variant|Transcript|ENST21_FAR\n",
+        records[0]
+    );
+    let mate = "N[22:5000000[|upstream_gene_variant|Transcript|ENST22";
+    let own = "N.|upstream_gene_variant|Transcript|ENST21";
+    let expected = directory.join("expected.vcf");
+    let actual = directory.join("actual.vcf");
+    std::fs::write(
+        &expected,
+        format!("{header}{dot}{};CSQ={mate}\n", records[1]),
+    )
+    .expect("the reference is written");
+    std::fs::write(
+        &actual,
+        format!("{header}{dot}{};CSQ={mate},{own}\n", records[1]),
+    )
+    .expect("the candidate is written");
+    let mut seen = Vec::new();
+    for whole in [true, false] {
+        let report = directory.join(format!("report.{whole}.json"));
+        let ran = run(
+            &[
+                "--format",
+                "vcf",
+                "--expected",
+                path_text(&expected),
+                "--actual",
+                path_text(&actual),
+                "--input",
+                path_text(&input),
+                "--json-cache",
+                path_text(&cache),
+                "--masks",
+                OWN_ROWS,
+                "--report",
+                path_text(&report),
+            ],
+            whole,
+        );
+        seen.push((std::fs::read(&report).ok(), ran.out, ran.code));
+    }
+    assert_eq!(
+        seen[0], seen[1],
+        "the streamed comparison against the whole one"
     );
 }

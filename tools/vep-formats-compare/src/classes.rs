@@ -2099,7 +2099,12 @@ pub const PLUGIN_VALUE_ON_REFERENCE_SKIPPED_RECORD: &str =
 /// allele at a Location where the reference wrote mate rows naming another chromosome and no
 /// own-end row (AnnotationType/Transcript.pm:122 names the record's slice by the first
 /// transcript reached, :125-143 then fail every own-chromosome transcript), the transcript on
-/// the Location's chromosome within 5,000 bases of the breakpoint. The two breakend classes
+/// the Location's chromosome within 5,000 bases of the breakpoint; and
+/// (`filter_bnd_synonym_mate_rows`) a Transcript row the candidate alone writes under a
+/// bracket allele whose mate name, `chr` stripped as the reference strips it, is no chromosome
+/// of the cache, the reference writing no row under that allele, and a record the reference
+/// wrote no row for has its `CSQ_present` left uncompared once every candidate row is set
+/// aside. The two breakend classes
 /// read the candidate's JSON cache (`--json-cache`), as the structural-variant comparator does.
 pub const BREAKEND_MATE_LOCAL_READ: &str = "breakend_mate_local_read";
 pub const BND_OWN_CHROMOSOME_ROWS_LOST: &str = "bnd_own_chromosome_rows_lost";

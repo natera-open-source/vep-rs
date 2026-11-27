@@ -118,13 +118,18 @@ The groups handed over are put in the byte order of their lines before they are 
 order the sorted canonical form has them in, so the report is the one the whole outputs give.
 Each side is written once a reading, by one thread, and no file is written.
 
-The outputs are compared whole in the recoder format, under `--keep-only`, under a
-class that reads across records (`reference_skipped_record`, `individual_allele_order`,
-`breakend_mate_local_read`, `bnd_own_chromosome_rows_lost`), under a JSON floor on a field whose
+The outputs are compared whole in the recoder format, under `--keep-only`, under
+`individual_allele_order`, under a class that reads across records
+(`reference_skipped_record`, `breakend_mate_local_read`, `bnd_own_chromosome_rows_lost`) in the
+default and tab formats, under a JSON floor on a field whose
 name holds a dot or on a column no single line holds, and in the two other modes. A Parquet
 comparison compares them whole as well where the reference is refused, where a tab reference's
 or a tab candidate's column line follows a data line, where a row of either side holds a line
 end, and where a row of a Parquet side opens with `#`.
+In the VCF and JSON formats those three classes hand over the groups of the input records
+they can touch and stream the rest: a record on a skip route, a breakend (a bracket, `<BND>`,
+a single breakend or `SVTYPE=BND`), and every record whose span lies within two bases of one
+of those.
 `VEP_FORMATS_COMPARE_WHOLE=1` compares the whole outputs in every format. Both paths write the
 same report, the same standard output and the same exit code, but for the one input **Bounds**
 names.

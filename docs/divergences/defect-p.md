@@ -240,6 +240,8 @@ ENST00000390690:
 
 Ensembl VEP writes the two own-end rows and nothing under the mate allele; vep-rs writes the same two own-end rows and the two mate rows, identical to the own-end rows in every column but Allele because the two breakpoints are 50 bases apart. On GRCh37 the record writes 7 rows against 14 the same way.
 
+Where the own end reaches no transcript either, Ensembl VEP writes no CSQ at all for the record. `chr13 31613634 bnd3 C C[CHR17:7675000[ . PASS SVTYPE=BND` lies 100 kb into a gap with no gene, and its mate lies inside TP53. Ensembl VEP 116.3 writes the VCF line without CSQ. vep-rs writes the 38 mate rows that both engines write when the mate is spelled `chr17`.
+
 ### 24.4 Why Ensembl VEP writes that
 
 The chromosome 21 transcripts reach the record through its own coordinates and pass the slice test on the record's slice, `21`. For each of them the mate allele is added to the row only if `_close_to_feature` passes for the breakend (`StructuralVariationOverlap.pm` lines 90-102). Its name test, `_compare_seq_region_names` (`Utils/VariationEffect.pm` lines 111-124), finds `Chr21` neither among the synonym table's keys, which hold `chr21`, nor equal to `21` once both are lower-cased. The own-end rows are written; the mate allele is never added. With the mate written `chr21` or `21` the same test passes and the mate rows are written.
@@ -271,9 +273,10 @@ The capitalised prefix and an accession naming another chromosome produce the cl
 `filter_bnd_synonym_mate_rows` in `tools/vep-sv-compare` runs under the cache authority. It sets aside a vep-rs tuple under a bracket allele when all of these hold:
 
 - the mate name, `chr` stripped, is not a chromosome the cache files;
-- Ensembl VEP wrote rows at the Location and none under the bracket allele;
-- the tuple's transcript is not on the Location's own chromosome.
+- Ensembl VEP wrote no row under the bracket allele;
+- where Ensembl VEP wrote rows at the Location, the tuple's transcript is not on the Location's own chromosome;
+- where it wrote none, the tuple's transcript lies on the mate's chromosome within 5,000 bases of the mate.
 
-It also sets a tuple aside when the mate name is the record's own chromosome spelled with a prefix Ensembl VEP does not resolve (`Chr21`), in which case vep-rs's mate rows on the own chromosome are set aside too. The SNP/indel comparator counts the shape and sets nothing aside, a synonym there being any mate name outside the canonical contig set.
+It also sets a tuple aside when the mate name is the record's own chromosome spelled with a prefix Ensembl VEP does not resolve (`Chr21`), in which case vep-rs's mate rows on the own chromosome are set aside too. The format comparator `tools/vep-formats-compare` applies the same rule, `filter_bnd_synonym_mate_rows`, under `bnd_own_chromosome_rows_lost`. On a record whose every vep-rs row it sets aside, and for which Ensembl VEP wrote none, it leaves the VCF line's `CSQ_present` uncompared. The SNP/indel comparator counts the shape and sets nothing aside, a synonym there being any mate name outside the canonical contig set.
 
 Counts (`excluded_bnd_synonym_mate_rows_rust`): 0 on every measured set. Every mate in the gnomAD-SV files is named through `CHR2` as `chr21`, `chrX` or `chrY`, synonyms the cache lists, and the synthetic breakends write their mates with the cache's own names.
