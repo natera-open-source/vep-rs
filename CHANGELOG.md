@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
+### Fixed
+
+- Caches, reference FASTA and the cache tools
+  - `vep-cache-builder --extended-promoters` files a promoter with `extended_start=0` in the first shard at start 0, as Ensembl VEP reads it, and a non-finite 1000 Genomes frequency is skipped instead of ending the build. (#136)
+
 ## [1.0.0] - 2026-11-24
 
 ### Added

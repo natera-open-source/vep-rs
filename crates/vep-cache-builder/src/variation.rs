@@ -1475,7 +1475,13 @@ impl ThousandGenomes {
                 let mut entry = [f64::NAN; 5];
                 for (slot, population_values) in entry.iter_mut().zip(&values) {
                     if let Some(value) = population_values.get(index) {
-                        *slot = value.parse().unwrap_or(f64::NAN);
+                        // `perl_g4` prints finite numbers alone, so `inf` and an
+                        // overflow are read as absent.
+                        *slot = value
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|value| value.is_finite())
+                            .unwrap_or(f64::NAN);
                     }
                 }
                 record_alleles.push(entry);
@@ -1544,11 +1550,11 @@ impl ThousandGenomes {
                     column.push(format!("{cache_allele}:{}", perl_g4(*frequency)));
                 }
             }
-            if chromosomes > 0 {
-                columns[0].push(format!(
-                    "{cache_allele}:{}",
-                    perl_g4(count / chromosomes as f64)
-                ));
+            // No chromosome, or a count past `f64`'s range, gives no whole-panel
+            // frequency, which `perl_g4` could not print.
+            let panel = count / chromosomes as f64;
+            if panel.is_finite() {
+                columns[0].push(format!("{cache_allele}:{}", perl_g4(panel)));
             }
         }
         for (column, entries) in THOUSAND_GENOMES_COLUMNS.iter().zip(columns) {
@@ -1965,6 +1971,54 @@ mod tests {
         );
         assert!(frequencies("rs9").is_empty());
         assert!(frequencies("COSV1").is_empty());
+
+        // A frequency that is not finite, `inf` or one past `f64`'s range, is
+        // read as absent, as text that is not a number is.
+        let infinite = write_vcf(
+            dir.path(),
+            "1000GENOMES-infinite.vcf",
+            "21\t44195140\trs2838519\tG\tA\t.\t.\tdbSNP_156;TSA=SNV;E_Freq;E_1000G;AFR=inf;AMR=1e309;EAS=0.4534;EUR=0.6024;SAS=0.5583\n",
+        );
+        let inputs = GenomeWideInputs {
+            frequencies: Some(infinite),
+            ..Default::default()
+        };
+        let records = collect(&germline, &inputs, None);
+        let record = records
+            .iter()
+            .find(|r| r.variation_name == "rs2838519")
+            .unwrap();
+        assert!(
+            !record.frequencies.contains_key("AFR") && !record.frequencies.contains_key("AMR"),
+            "{:?}",
+            record.frequencies
+        );
+
+        // A finite frequency whose chromosome count overflows writes its own
+        // column and no whole-panel `AF`.
+        let huge = write_vcf(
+            dir.path(),
+            "1000GENOMES-huge.vcf",
+            "21\t44195140\trs2838519\tG\tA\t.\t.\tdbSNP_156;TSA=SNV;E_Freq;E_1000G;AFR=1e306;AMR=0.379;EAS=0.4534;EUR=0.6024;SAS=0.5583\n",
+        );
+        let inputs = GenomeWideInputs {
+            frequencies: Some(huge),
+            ..Default::default()
+        };
+        let records = collect(&germline, &inputs, None);
+        let record = records
+            .iter()
+            .find(|r| r.variation_name == "rs2838519")
+            .unwrap();
+        assert_eq!(
+            record.frequencies.get("AFR").map(String::as_str),
+            Some("A:1e+306")
+        );
+        assert!(
+            !record.frequencies.contains_key("AF"),
+            "{:?}",
+            record.frequencies
+        );
     }
 
     /// A frequency VCF allele matches a variant's allele through the minimised

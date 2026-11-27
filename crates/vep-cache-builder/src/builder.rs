@@ -32,9 +32,11 @@ use crate::translation_row::{coding_records, RowUse};
 /// Region size for binning transcripts (1 Mb).
 pub(crate) const REGION_SIZE: u64 = 1_000_000;
 
-/// First 1-based position of the 1 Mb region containing `pos`.
+/// First 1-based position of the 1 Mb region containing `pos`; position 0, a
+/// promoter widened to it, falls in the first region, as Perl's `int(-1 / 1e6)`
+/// puts it there.
 pub(crate) fn region_start(pos: u64) -> u64 {
-    ((pos - 1) / REGION_SIZE) * REGION_SIZE + 1
+    (pos.saturating_sub(1) / REGION_SIZE) * REGION_SIZE + 1
 }
 
 /// Statistics from the cache build.

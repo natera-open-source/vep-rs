@@ -1355,6 +1355,33 @@ mod tests {
             .collect();
         assert_eq!(spans, [("P".to_string(), 900), ("E".to_string(), 1000)]);
 
+        // `extended_start=0` widens the promoter to position 0, as Ensembl VEP's
+        // numeric `$xs < $start` does (`RegFeat.pm:360-364`), and the feature is
+        // filed in the chromosome's first region.
+        let to_zero = write_gff(
+            dir.path(),
+            "to_zero.gff3.gz",
+            &["21\tEnsembl\tpromoter\t1000\t1200\t.\t.\t.\tID=Z;extended_start=0"],
+        );
+        let out = tempfile::tempdir().unwrap();
+        build_regulatory(
+            &RegulatoryInputs {
+                regulatory_gff: Some(to_zero),
+                extended_promoters: true,
+                ..Default::default()
+            },
+            out.path(),
+            &SequenceNames::default(),
+            None,
+        )
+        .unwrap();
+        let shards: Vec<String> = std::fs::read_dir(out.path().join("regulatory/21"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert_eq!(shards, ["1-1000000.json"]);
+        assert_eq!(shard(out.path(), "21", "1-1000000.json")[0]["start"], 0);
+
         let conflicting = write_gff(
             dir.path(),
             "conflicting.gff3.gz",
