@@ -43,7 +43,7 @@ vep-io = { path = "crates/vep-io", version = "=1.0.0", default-features = false 
 vep-plugin = { path = "crates/vep-plugin", version = "=1.0.0" }
 vep-builtins = { path = "crates/vep-builtins", version = "=1.0.0" }
 vep-fasta = { path = "crates/vep-fasta", version = "=1.0.0" }
-vep-cli = { path = "crates/vep-cli", version = "=1.0.0" }
+vep-cli = { path = "crates/vep-cli", version = "=1.0.0", default-features = false }
 vep-cache-builder = { path = "crates/vep-cache-builder", version = "=1.0.0", default-features = false }
 
 # Serialization / cache
@@ -97,9 +97,7 @@ regex = "1"
 
 # Allocator: the `vep` binary's default global allocator (vep-cli feature
 # `mimalloc`, on by default). Opt out with
-# `cargo build -p vep-cli --no-default-features --bin vep`; the package must
-# be named because another workspace member depends on vep-cli with its
-# default features.
+# `cargo build --no-default-features --bin vep`.
 mimalloc = "0.1"
 
 # Data structures

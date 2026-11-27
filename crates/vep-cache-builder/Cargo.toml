@@ -43,6 +43,8 @@ reqwest = { version = "0.13", default-features = false, optional = true, feature
     "blocking", "charset", "http2", "native-tls-no-alpn", "system-proxy",
 ] }
 noodles = { workspace = true }
+# For its `libdeflate` feature, which the BGZF outputs deflate through.
+noodles-bgzf = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 rayon = { workspace = true }

@@ -2823,6 +2823,7 @@ dependencies = [
  "md5",
  "mysql",
  "noodles",
+ "noodles-bgzf",
  "rayon",
  "reqwest",
  "serde",
