@@ -319,6 +319,12 @@ impl BatchQueryResult {
     pub(crate) fn is_empty(&self) -> bool {
         self.records_by_pos.is_empty()
     }
+
+    /// The records of chromosome `chr`, by the start they are filed at, each
+    /// start's in file order.
+    pub(crate) fn into_records_of(mut self, chr: &str) -> BTreeMap<u64, Vec<TabixRecord>> {
+        self.records_by_pos.remove(chr).unwrap_or_default()
+    }
 }
 
 /// Configuration for how to parse a tabix file's columns.
@@ -1841,7 +1847,7 @@ fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
     merged
 }
 
-fn normalize_range_bounds(start: u64, end: u64) -> (u64, u64) {
+pub(crate) fn normalize_range_bounds(start: u64, end: u64) -> (u64, u64) {
     if start <= end {
         (start, end)
     } else {

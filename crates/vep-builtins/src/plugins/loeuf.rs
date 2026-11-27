@@ -21,8 +21,17 @@
 //! `match_by=transcript` prints the matched record's value as written, `NA`
 //! included (`:177-182`); `match_by=gene` prints the smallest numeric value over
 //! the gene's records (`:184-205`).
+//!
+//! The table is small and the same for every variant, so each chromosome of
+//! it is read once, the first time a batch reaches it, and held as the three
+//! cells and the span of each row; a variant is then matched against the rows
+//! whose span overlaps it, as the region query matches it. A chromosome that
+//! cannot be read whole is read over each batch's variant spans instead, so a
+//! line that fails to read fails only the variants whose span reaches it.
 
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use indexmap::IndexMap;
 use tracing::debug;
@@ -30,8 +39,8 @@ use tracing::debug;
 use crate::annotation_store::AnnotationStore;
 use crate::params::PluginParams;
 use crate::tabix::{
-    check_plugin_table, indexed_table_config, split_field_count, table_contig, BatchQueryResult,
-    TabixAnnotator, TabixConfig, TabixRecord,
+    check_plugin_table, indexed_table_config, normalize_range_bounds, split_field_count,
+    table_contig, TabixAnnotator, TabixConfig, TabixRecord,
 };
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
 use vep_core::assembly::Assembly;
@@ -105,10 +114,70 @@ pub enum MatchBy {
     Transcript,
 }
 
+/// One row of the constraint table as the plugin reads it: where its span
+/// ends and the three cells it is matched and valued by.
+struct GeneRow {
+    end: u64,
+    transcript: Option<Box<str>>,
+    gene_id: Option<Box<str>>,
+    loeuf: Option<Box<str>>,
+    /// Whether the LOEUF cell lies before the trailing empty cells
+    /// `split /\t/` drops (`LOEUF.pm:215`).
+    loeuf_split: bool,
+}
+
+/// One chromosome of the table: its rows by the start the region query files
+/// them at, each start's in file order, and the longest span among them.
+struct Contig {
+    rows: BTreeMap<u64, Vec<GeneRow>>,
+    longest_span: u64,
+}
+
+impl Contig {
+    fn of(records: BTreeMap<u64, Vec<TabixRecord>>, layout: Layout) -> Self {
+        let mut longest_span = 0;
+        let rows = records
+            .into_iter()
+            .map(|(filed_at, records)| {
+                let rows = records
+                    .iter()
+                    .map(|record| {
+                        longest_span = longest_span.max(record.end.saturating_sub(record.start));
+                        let text = |index| cell(record, index).map(Box::from);
+                        GeneRow {
+                            end: record.end,
+                            transcript: text(layout.transcript),
+                            gene_id: text(layout.gene_id),
+                            loeuf: text(layout.loeuf),
+                            loeuf_split: layout.loeuf < split_field_count(&record.columns),
+                        }
+                    })
+                    .collect();
+                (filed_at, rows)
+            })
+            .collect();
+        Self { rows, longest_span }
+    }
+
+    /// The rows whose span overlaps `start..=end`, in the order
+    /// `BatchQueryResult::lookup` gives the records of a region query.
+    fn overlapping(&self, start: u64, end: u64) -> Vec<&GeneRow> {
+        let (start, end) = normalize_range_bounds(start, end);
+        self.rows
+            .range(start.saturating_sub(self.longest_span)..=end)
+            .flat_map(|(_, rows)| rows)
+            .filter(|row| row.end >= start)
+            .collect()
+    }
+}
+
 /// LOEUF gene-constraint plugin.
 pub struct LoeufPlugin {
     /// Annotation store over the constraint table, set by `init`.
     store: Option<Box<dyn AnnotationStore>>,
+    /// The chromosomes of the table read so far, by the name a variant asks
+    /// for them under; `None` for one that could not be read whole.
+    contigs: Mutex<HashMap<String, Option<Arc<Contig>>>>,
     layout: Option<Layout>,
     match_by: Option<MatchBy>,
     /// The run's assembly, which names a mitochondrial record's contig to the
@@ -127,6 +196,7 @@ impl LoeufPlugin {
     pub fn new() -> Self {
         Self {
             store: None,
+            contigs: Mutex::new(HashMap::new()),
             layout: None,
             match_by: None,
             assembly: None,
@@ -154,28 +224,22 @@ impl LoeufPlugin {
     /// value; with `match_by=gene` the smallest numeric LOEUF over the records
     /// naming the row's gene, as that record wrote it, ties to the earlier
     /// record (`:184-205`). `None` when nothing matches.
-    fn value_for(
-        &self,
-        records: &[&TabixRecord],
-        tc: &TranscriptConsequence,
-    ) -> Option<(String, bool)> {
-        let layout = self.layout?;
+    fn value_for(&self, rows: &[&GeneRow], tc: &TranscriptConsequence) -> Option<(String, bool)> {
         match self.match_by? {
-            MatchBy::Transcript => records
+            MatchBy::Transcript => rows
                 .iter()
-                .find(|record| cell(record, layout.transcript) == Some(tc.transcript_id()))
-                .map(|record| {
-                    let present = split_field_count(&record.columns);
-                    let value = cell(record, layout.loeuf).filter(|_| layout.loeuf < present);
+                .find(|row| row.transcript.as_deref() == Some(tc.transcript_id()))
+                .map(|row| {
+                    let value = row.loeuf.as_deref().filter(|_| row.loeuf_split);
                     (value.unwrap_or("").to_string(), value == Some(""))
                 }),
             MatchBy::Gene => {
                 let mut minimum: Option<(f64, &str)> = None;
-                for record in records {
-                    if cell(record, layout.gene_id) != Some(tc.gene_id()) {
+                for row in rows {
+                    if row.gene_id.as_deref() != Some(tc.gene_id()) {
                         continue;
                     }
-                    let Some(text) = cell(record, layout.loeuf) else {
+                    let Some(text) = row.loeuf.as_deref() else {
                         continue;
                     };
                     let Some(number) = number_of(text) else {
@@ -188,6 +252,28 @@ impl LoeufPlugin {
                 minimum.map(|(_, text)| (text.to_string(), false))
             }
         }
+    }
+
+    /// The chromosome a variant names `chr`, read on the first call for it:
+    /// one region query from the first base to the last the index can address,
+    /// so the rows are the ones every region query on the chromosome reads.
+    /// `None` when that read fails, which is kept, so the chromosome is not
+    /// read whole again.
+    fn contig(
+        &self,
+        store: &dyn AnnotationStore,
+        layout: Layout,
+        chr: &str,
+    ) -> Option<Arc<Contig>> {
+        let contigs = || self.contigs.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(contig) = contigs().get(chr) {
+            return contig.clone();
+        }
+        let read = store
+            .query_batch(&[(chr, 1, u64::MAX)])
+            .ok()
+            .map(|batch| Arc::new(Contig::of(batch.into_records_of(chr), layout)));
+        contigs().entry(chr.to_string()).or_insert(read).clone()
     }
 }
 
@@ -311,18 +397,38 @@ impl BuiltinPlugin for LoeufPlugin {
     }
 
     fn prefetch(&self, variants: &[InputVariant]) -> Result<Option<PrefetchData>, PluginError> {
-        let Some(store) = &self.store else {
+        let (Some(store), Some(layout)) = (&self.store, self.layout) else {
             return Ok(None);
         };
-        let regions: Vec<(&str, u64, u64)> = variants
-            .iter()
-            .filter(|v| !v.is_structural)
-            .map(|v| (table_contig(v, self.assembly), v.start, v.end))
-            .collect();
-        if regions.is_empty() {
+        let mut contigs: HashMap<String, Arc<Contig>> = HashMap::new();
+        // The spans of the variants on a chromosome not read whole, queried as
+        // a batch's spans are, so a failing read fails only the variants that
+        // reach it.
+        let mut unread: BTreeMap<&str, Vec<(&str, u64, u64)>> = BTreeMap::new();
+        for variant in variants.iter().filter(|v| !v.is_structural) {
+            let chr = table_contig(variant, self.assembly);
+            if contigs.contains_key(chr) {
+                continue;
+            }
+            if !unread.contains_key(chr) {
+                if let Some(contig) = self.contig(store.as_ref(), layout, chr) {
+                    contigs.insert(chr.to_string(), contig);
+                    continue;
+                }
+            }
+            unread
+                .entry(chr)
+                .or_default()
+                .push((chr, variant.start, variant.end));
+        }
+        for (chr, regions) in unread {
+            let records = store.query_batch(&regions)?.into_records_of(chr);
+            contigs.insert(chr.to_string(), Arc::new(Contig::of(records, layout)));
+        }
+        if contigs.is_empty() {
             return Ok(None);
         }
-        Ok(Some(PrefetchData::new(store.query_batch(&regions)?)))
+        Ok(Some(PrefetchData::new(contigs)))
     }
 
     fn annotate(
@@ -330,16 +436,12 @@ impl BuiltinPlugin for LoeufPlugin {
         variants: &mut [InputVariant],
         data: PrefetchData,
     ) -> Result<(), PluginError> {
-        let batch: BatchQueryResult = data.downcast()?;
-        if batch.is_empty() {
-            return Ok(());
-        }
+        let contigs: HashMap<String, Arc<Contig>> = data.downcast()?;
         for variant in variants.iter_mut().filter(|v| !v.is_structural) {
-            let records = batch.lookup(
-                table_contig(variant, self.assembly),
-                variant.start,
-                variant.end,
-            );
+            let Some(contig) = contigs.get(table_contig(variant, self.assembly)) else {
+                continue;
+            };
+            let records = contig.overlapping(variant.start, variant.end);
             if records.is_empty() {
                 continue;
             }
@@ -371,7 +473,7 @@ impl BuiltinPlugin for LoeufPlugin {
         _consequence: &TranscriptConsequence,
         _variant: &InputVariant,
     ) -> Result<IndexMap<String, String>, PluginError> {
-        // The rows are written in `annotate`, from one region query per batch.
+        // The rows are written in `annotate`, from the table held in memory.
         Ok(IndexMap::new())
     }
 }
@@ -690,6 +792,153 @@ mod tests {
         v4.run_batch(&mut variants).unwrap();
         assert_eq!(loeuf_of(&variants, 0, 0), Some("9.0772e-01"));
         assert_eq!(loeuf_of(&variants, 0, 1), Some("9.0772e-01"));
+    }
+
+    /// `LOEUF.pm` `run` asks `get_data` for the rows over the variant first
+    /// and matches the identifiers among them alone, so a row whose gene's
+    /// record lies elsewhere on the chromosome, or on another chromosome,
+    /// gets nothing, and of two overlapping genes each row gets its own gene's
+    /// value, under either `match_by`, in one batch and in the next.
+    #[test]
+    fn a_row_gets_the_value_of_a_record_over_its_variant_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let gene =
+            |name: &str, transcript: &str, id: &str, loeuf: &str, chr: &str, span: (&str, &str)| {
+                row(
+                    78,
+                    &[
+                        (0, name),
+                        (1, transcript),
+                        (30, loeuf),
+                        (64, id),
+                        (75, chr),
+                        (76, span.0),
+                        (77, span.1),
+                    ],
+                )
+            };
+        let header = row(
+            78,
+            &[
+                (0, "#gene"),
+                (1, "transcript"),
+                (30, "oe_lof_upper"),
+                (64, "gene_id"),
+                (75, "chromosome"),
+                (76, "start_position"),
+                (77, "end_position"),
+            ],
+        );
+        let lines = [
+            header,
+            gene(
+                "ELSEWHERE",
+                "ENST3",
+                "ENSG3",
+                "3.0000e-01",
+                "1",
+                ("1000", "5000"),
+            ),
+            gene("A", "ENST1", "ENSG1", "1.0000e-01", "21", ("1000", "5000")),
+            gene("B", "ENST2", "ENSG2", "2.0000e-01", "21", ("3000", "8000")),
+            gene(
+                "FAR",
+                "ENST4",
+                "ENSG4",
+                "4.0000e-01",
+                "21",
+                ("20000", "30000"),
+            ),
+        ];
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let path = write_tabix_fixture(
+            dir.path(),
+            "loeuf_dataset.tsv.gz",
+            &lines,
+            IndexSpec::standard().with_span_cols(76, 77, 78),
+        );
+        let rows: &[(&str, &str, &[Consequence])] = &[
+            ("ENST1", "ENSG1", MISSENSE),
+            ("ENST2", "ENSG2", MISSENSE),
+            ("ENST3", "ENSG3", MISSENSE),
+            ("ENST4", "ENSG4", MISSENSE),
+        ];
+        for match_by in ["gene", "transcript"] {
+            let plugin = plugin(&path, match_by);
+            for _batch in 0..2 {
+                let mut variants = vec![variant(4000, rows), variant(6000, rows)];
+                plugin.run_batch(&mut variants).unwrap();
+                let written = |v| {
+                    (0..4)
+                        .map(|r| loeuf_of(&variants, v, r))
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(
+                    written(0),
+                    [Some("1.0000e-01"), Some("2.0000e-01"), None, None],
+                    "{match_by}"
+                );
+                assert_eq!(
+                    written(1),
+                    [None, Some("2.0000e-01"), None, None],
+                    "{match_by}"
+                );
+            }
+        }
+    }
+
+    /// `LOEUF.pm` `run` reads the rows over each variant alone, so a line past
+    /// the batch's variants that cannot be read, here one over the line limit,
+    /// fails none of them, in this batch and the next.
+    #[test]
+    fn a_table_unreadable_past_the_batch_still_answers_its_variants() {
+        let dir = tempfile::tempdir().unwrap();
+        let gene = |name: &str, id: &str, start: &str, end: &str, filler: &str| {
+            row(
+                78,
+                &[
+                    (0, name),
+                    (1, "ENST1"),
+                    (2, filler),
+                    (30, "1.0000e-01"),
+                    (64, id),
+                    (75, "21"),
+                    (76, start),
+                    (77, end),
+                ],
+            )
+        };
+        let overlong = "x".repeat(crate::tabix::MAX_LINE_BYTES);
+        let lines = [
+            row(
+                78,
+                &[
+                    (0, "#gene"),
+                    (1, "transcript"),
+                    (30, "oe_lof_upper"),
+                    (64, "gene_id"),
+                    (75, "chromosome"),
+                    (76, "start_position"),
+                    (77, "end_position"),
+                ],
+            ),
+            gene("A", "ENSG1", "1000", "5000", ""),
+            gene("FAR", "ENSG4", "20000", "30000", ""),
+            gene("LONG", "ENSG5", "45000000", "45001000", &overlong),
+        ];
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let path = write_tabix_fixture(
+            dir.path(),
+            "loeuf_dataset.tsv.gz",
+            &lines,
+            IndexSpec::standard().with_span_cols(76, 77, 78),
+        );
+        let plugin = plugin(&path, "gene");
+        for _batch in 0..2 {
+            let mut variants = vec![variant(4000, &[("ENST1", "ENSG1", MISSENSE)])];
+            plugin.run_batch(&mut variants).unwrap();
+            assert_eq!(loeuf_of(&variants, 0, 0), Some("1.0000e-01"));
+        }
     }
 
     /// `LOEUF.pm:177-182`: under `match_by=transcript` the row prints the value
