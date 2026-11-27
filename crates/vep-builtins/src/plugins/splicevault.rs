@@ -78,6 +78,7 @@ use tracing::debug;
 
 use crate::annotation_store::{open_best_store_with, AnnotationStore};
 use crate::params::{Grammar, PluginParams};
+use crate::pool_pass::map_in_order;
 use crate::tabix::{
     allele_match, table_contig, BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord,
 };
@@ -483,10 +484,8 @@ impl BuiltinPlugin for SpliceVaultPlugin {
             return Ok(Some(PrefetchData::new(Vec::<BatchQueryResult>::new())));
         }
         // One batch per file, in file order (BaseVepTabixPlugin.pm:591-610).
-        let batches = self
-            .sources
-            .iter()
-            .map(|source| source.store.query_batch(&regions))
+        let batches = map_in_order(&self.sources, |source| source.store.query_batch(&regions))
+            .into_iter()
             .collect::<Result<Vec<BatchQueryResult>, PluginError>>()?;
         Ok(Some(PrefetchData::new(batches)))
     }

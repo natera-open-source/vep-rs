@@ -27,6 +27,7 @@ use tracing::{debug, warn};
 use crate::annotation_store::{check_table_or_store, open_best_store_with, AnnotationStore};
 use crate::custom::grammar::truthy;
 use crate::params::{Grammar, PluginParams};
+use crate::pool_pass::map_in_order;
 use crate::tabix::allele_match::{self, KeyPosition};
 use crate::tabix::{
     find_index_path, header_lines, indexed_table_config, split_field_count, table_contig,
@@ -707,10 +708,12 @@ impl BuiltinPlugin for CaddPlugin {
             })
             .collect();
 
-        let mut batch_results = Vec::with_capacity(self.sources.len());
-        for source in &self.sources {
-            batch_results.push(source.store.query_batch(&regions)?);
-        }
+        // The files are read side by side; the first failure in file order is
+        // the batch's.
+        let batch_results =
+            map_in_order(&self.sources, |source| source.store.query_batch(&regions))
+                .into_iter()
+                .collect::<Result<Vec<BatchQueryResult>, PluginError>>()?;
 
         Ok(Some(PrefetchData::new(batch_results)))
     }

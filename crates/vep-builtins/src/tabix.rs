@@ -728,6 +728,13 @@ impl TabixAnnotator {
     /// Batch query: accepts a slice of (chr, start, end) regions, merges
     /// overlapping regions, issues minimal tabix seeks, and returns all
     /// records indexed by position.
+    ///
+    /// On an index built on the start column alone a record lies in a region
+    /// by its start, so the regions are read as the windows of
+    /// [`query_windows_parallel`](Self::query_windows_parallel), merged only
+    /// where they overlap or touch: the rows between two regions are passed
+    /// over unparsed, and the result answers [`BatchQueryResult::lookup`] over
+    /// each region as the gap-bridged read does.
     pub fn query_batch(
         &self,
         regions: &[(&str, u64, u64)],
@@ -743,10 +750,36 @@ impl TabixAnnotator {
         }
 
         let mut all_records: HashMap<String, BTreeMap<u64, Vec<TabixRecord>>> = HashMap::new();
+        // `tabix` files a row that starts below the first base at the first
+        // base (htslib 1.9 `tbx.c:99`) and hands it out among the rows written
+        // there, in the file's order.
+        let filed_at = |record: &TabixRecord| {
+            if self.rows_as_tabix_indexes_them {
+                record.start.max(1)
+            } else {
+                record.start
+            }
+        };
+        let start_is_span = self
+            .config
+            .end_col
+            .is_none_or(|end_col| end_col == self.config.start_col);
 
         for (chr, mut intervals) in by_chr {
             intervals.sort_by_key(|&(s, _)| s);
-            let merged = merge_intervals(&intervals);
+            if start_is_span {
+                let windows = merge_intervals(&intervals, 1);
+                for record in self.query_windows_parallel(chr, &windows)? {
+                    all_records
+                        .entry(chr.to_string())
+                        .or_default()
+                        .entry(filed_at(&record))
+                        .or_default()
+                        .push(record);
+                }
+                continue;
+            }
+            let merged = merge_intervals(&intervals, GAP_BRIDGE);
 
             let mut previous_end: Option<u64> = None;
             for &(region_start, region_end) in &merged {
@@ -758,18 +791,10 @@ impl TabixAnnotator {
                     if previous_end.is_some_and(|end| record.start <= end) {
                         continue;
                     }
-                    // `tabix` files a row that starts below the first base at
-                    // the first base (htslib 1.9 `tbx.c:99`) and hands it out
-                    // among the rows written there, in the file's order.
-                    let filed_at = if self.rows_as_tabix_indexes_them {
-                        record.start.max(1)
-                    } else {
-                        record.start
-                    };
                     all_records
                         .entry(chr.to_string())
                         .or_default()
-                        .entry(filed_at)
+                        .entry(filed_at(&record))
                         .or_default()
                         .push(record);
                 }
@@ -1818,8 +1843,9 @@ fn block_line_runs(
     (runs, incomplete, open_line)
 }
 
-/// Merge overlapping/adjacent intervals. Input must be sorted by start.
-fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
+/// `intervals`, sorted by start, merged where one starts within `bridge`
+/// bases past the end of the one before.
+fn merge_intervals(intervals: &[(u64, u64)], bridge: u64) -> Vec<(u64, u64)> {
     if intervals.is_empty() {
         return Vec::new();
     }
@@ -1829,7 +1855,7 @@ fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
 
     for &(s, e) in &intervals[1..] {
         // A small gap is bridged too: one longer read beats a second seek.
-        if s <= cur_end.saturating_add(GAP_BRIDGE) {
+        if s <= cur_end.saturating_add(bridge) {
             cur_end = cur_end.max(e);
         } else {
             merged.push((cur_start, cur_end));
@@ -5683,6 +5709,103 @@ mod tests {
         assert_eq!(lines(&ann.query_windows("21", &windows).unwrap()), by_query);
     }
 
+    /// `query_batch` as it reads an index the start column alone does not
+    /// build: the regions bridged across `GAP_BRIDGE`, each merged region read
+    /// whole and every record of it kept, filed as the batch files it.
+    fn gap_bridged_batch(
+        ann: &TabixAnnotator,
+        chr: &str,
+        regions: &[(u64, u64)],
+    ) -> BatchQueryResult {
+        let mut intervals: Vec<(u64, u64)> = regions
+            .iter()
+            .map(|&(start, end)| normalize_range_bounds(start, end))
+            .collect();
+        intervals.sort_by_key(|&(start, _)| start);
+        let mut by_start: BTreeMap<u64, Vec<TabixRecord>> = BTreeMap::new();
+        let mut previous_end: Option<u64> = None;
+        for (start, end) in merge_intervals(&intervals, GAP_BRIDGE) {
+            for record in ann.query_tabix_region(chr, start, end).unwrap() {
+                if previous_end.is_some_and(|end| record.start <= end) {
+                    continue;
+                }
+                let filed_at = if ann.rows_as_tabix_indexes_them {
+                    record.start.max(1)
+                } else {
+                    record.start
+                };
+                by_start.entry(filed_at).or_default().push(record);
+            }
+            previous_end = Some(end);
+        }
+        BatchQueryResult::from_records(HashMap::from([(chr.to_string(), by_start)]))
+    }
+
+    /// On a start-only index `query_batch` reads the regions as windows, with
+    /// no bridge across the bases between them, and each region's `lookup`
+    /// is the bridged read's: a dense table with regions 900 bases apart, two
+    /// clusters in one index tile, overlapping and touching regions, an
+    /// insertion's swapped pair, a region past the index's last position, and
+    /// rows at position 0 filed at the first base.
+    #[test]
+    fn query_batch_on_a_start_only_index_looks_up_each_region_as_the_bridged_read() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let dense = open(fixture_with_index(dir.path(), "blocks.tsv.gz", "tbi"), None);
+        let regions: Vec<(u64, u64)> = vec![
+            (5_010_000, 5_010_000),
+            (5_010_900, 5_010_910),
+            (5_010_905, 5_010_920),
+            (5_010_921, 5_010_930),
+            (5_016_000, 5_016_050),
+            (5_029_890, 5_029_880),
+            (5_033_790, 600_000_000),
+        ];
+        let below = write_tabix_fixture(
+            dir.path(),
+            "zero.tsv.gz",
+            &[
+                "21\t0\tat_zero",
+                "21\t-2\tbelow",
+                "21\t1\tat_one",
+                "21\t2\tat_two",
+            ],
+            IndexSpec::standard(),
+        );
+        let at_zero = open(below, None).reading_rows_as_tabix_indexes_them();
+        let first_bases: Vec<(u64, u64)> = vec![(1, 0), (2, 2), (0, 3)];
+        for (ann, regions) in [(&dense, &regions), (&at_zero, &first_bases)] {
+            let queried: Vec<(&str, u64, u64)> = regions
+                .iter()
+                .map(|&(start, end)| ("21", start, end))
+                .collect();
+            let windowed = ann.query_batch(&queried).unwrap();
+            let bridged = gap_bridged_batch(ann, "21", regions);
+            for &(start, end) in regions {
+                assert_eq!(
+                    lines(windowed.lookup("21", start, end)),
+                    lines(bridged.lookup("21", start, end)),
+                    "{start}-{end}"
+                );
+            }
+        }
+        let from_zero = at_zero.query_batch(&[("21", 0, 3)]).unwrap();
+        assert_eq!(
+            from_zero.lookup("21", 0, 3).len(),
+            4,
+            "the rows at 0 are read"
+        );
+        // The rows between two regions 900 bases apart are not kept.
+        let apart = [(5_010_000, 5_010_000), (5_010_903, 5_010_903)];
+        let windowed = dense
+            .query_batch(&apart.map(|(start, end)| ("21", start, end)))
+            .unwrap();
+        let bridged = gap_bridged_batch(&dense, "21", &apart);
+        assert_eq!(windowed.lookup("21", 5_010_000, 5_010_903).len(), 2);
+        assert_eq!(bridged.lookup("21", 5_010_000, 5_010_903).len(), 130);
+    }
+
     /// A batch whose one wide span ends past the index's last addressable
     /// position merges with its neighbours' spans into one region; the region
     /// is read to that position, so the neighbours keep their records.
@@ -6195,31 +6318,31 @@ mod tests {
 
     #[test]
     fn test_merge_intervals_empty() {
-        assert!(merge_intervals(&[]).is_empty());
+        assert!(merge_intervals(&[], GAP_BRIDGE).is_empty());
     }
 
     #[test]
     fn test_merge_intervals_single() {
-        let merged = merge_intervals(&[(100, 200)]);
+        let merged = merge_intervals(&[(100, 200)], GAP_BRIDGE);
         assert_eq!(merged, vec![(100, 200)]);
     }
 
     #[test]
     fn test_merge_intervals_overlapping() {
         // All three intervals are within 1000bp gap, so they merge into one.
-        let merged = merge_intervals(&[(100, 200), (150, 300), (500, 600)]);
+        let merged = merge_intervals(&[(100, 200), (150, 300), (500, 600)], GAP_BRIDGE);
         assert_eq!(merged, vec![(100, 600)]);
     }
 
     #[test]
     fn test_merge_intervals_adjacent_within_gap() {
-        let merged = merge_intervals(&[(100, 200), (800, 900)]);
+        let merged = merge_intervals(&[(100, 200), (800, 900)], GAP_BRIDGE);
         assert_eq!(merged, vec![(100, 900)]);
     }
 
     #[test]
     fn test_merge_intervals_far_apart() {
-        let merged = merge_intervals(&[(100, 200), (5000, 6000)]);
+        let merged = merge_intervals(&[(100, 200), (5000, 6000)], GAP_BRIDGE);
         assert_eq!(merged, vec![(100, 200), (5000, 6000)]);
     }
 

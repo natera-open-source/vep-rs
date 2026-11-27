@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tabix tables indexed on their start column alone (`gnomADc`, `CADD`, `SpliceAI` and others) read only each batch's own windows, side by side: 56 percent less wall time for `gnomADc` on ClinVar chr21, 16 threads. (#140)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 

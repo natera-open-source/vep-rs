@@ -62,6 +62,7 @@ use vep_core::variant::InputVariant;
 
 use crate::annotation_store::{open_best_store_with, AnnotationStore};
 use crate::params::{perl_numeric, Grammar, PluginParams};
+use crate::pool_pass::map_in_order;
 use crate::tabix::{
     allele_match, lossy_text, table_contig, BatchQueryResult, BoundedLines, TabixAnnotator,
     TabixConfig, TabixRecord,
@@ -575,10 +576,10 @@ impl BuiltinPlugin for SpliceAiPlugin {
                 (table_contig(variant, self.assembly), start, end)
             })
             .collect();
-        let batches = self
-            .stores
-            .iter()
-            .map(|store| store.query_batch(&regions))
+        // The files are read side by side; the first failure in file order is
+        // the batch's.
+        let batches = map_in_order(&self.stores, |store| store.query_batch(&regions))
+            .into_iter()
             .collect::<Result<Vec<BatchQueryResult>, PluginError>>()?;
         Ok(Some(PrefetchData::new(batches)))
     }
