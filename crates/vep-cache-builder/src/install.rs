@@ -50,7 +50,7 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use tracing::{info, warn};
@@ -258,8 +258,9 @@ pub struct Listing {
 }
 
 impl Listing {
-    /// Parses the file's text; a line without the three fields, or whose first
-    /// two are not numbers, is passed over.
+    /// Parses the file's text; a line without the three fields, whose first
+    /// two are not numbers, or whose name is not one bare file name, is passed
+    /// over.
     pub fn parse(text: &str) -> Self {
         let entries = text
             .lines()
@@ -268,6 +269,13 @@ impl Listing {
                 let sum = fields.next()?.parse::<u16>().ok()?;
                 let blocks = fields.next()?.parse::<u64>().ok()?;
                 let name = fields.next()?;
+                // A name is joined onto the destination directory, so an
+                // absolute path, `..` or a separator would place a file outside it.
+                let mut parts = Path::new(name).components();
+                match (parts.next(), parts.next()) {
+                    (Some(Component::Normal(part)), None) if part == name => {}
+                    _ => return None,
+                }
                 Some((name.to_string(), Checksum { sum, blocks }))
             })
             .collect();
@@ -2548,6 +2556,23 @@ mod tests {
         );
         assert!(!listing.contains("12345"));
         assert_eq!(listing.names().len(), 3);
+    }
+
+    /// A listed name that is not one bare file name, absolute, climbing out
+    /// or naming a subdirectory, is passed over, so no fetch places a file
+    /// outside its destination directory.
+    #[test]
+    fn listing_passes_over_names_that_are_not_a_file_name() {
+        let listing = Listing::parse(
+            "12345 1 /home/user/notes.primary_assembly.fa.gz\n\
+             12345 1 ../../../x.primary_assembly.fa.gz\n\
+             12345 1 sub/x.primary_assembly.fa.gz\n\
+             12345 1 ..\n\
+             12345 1 .\n\
+             12345 1 Homo_sapiens.GRCh38.116.gff3.gz\n",
+        );
+        assert_eq!(listing.names(), ["Homo_sapiens.GRCh38.116.gff3.gz"]);
+        assert_eq!(genome_fasta_name(&listing), None);
     }
 
     /// The primary assembly is preferred to the toplevel file and the masked

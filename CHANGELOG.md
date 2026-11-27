@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
+### Fixed
+
+- Caches, reference FASTA and the cache tools
+  - `vep-cache-builder --auto` passes over a `CHECKSUMS` line whose name is not one bare file name, so a mirror cannot place or delete a file outside the work directory. (#143)
+
 ## [1.0.0] - 2026-11-24
 
 ### Added
