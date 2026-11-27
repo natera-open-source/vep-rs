@@ -29,6 +29,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use indexmap::IndexMap;
+use rayon::prelude::*;
 
 use crate::params::{Grammar, PluginParams};
 use crate::tabix::allele_match::{dashed, minimal_forms};
@@ -121,7 +122,8 @@ const SUMMARY_COLUMNS: [&str; 6] = [
 /// risk allele, p-value, study, PubMed id, trait URIs, beta coefficient and
 /// odds ratio, tab-separated (GWAS.pm:406-416). For a summary-statistics record
 /// it is the file's own line, read through the header's column map
-/// (`:494-501`).
+/// (`:494-501`), and once the records are sorted the four cells of it the
+/// plugin writes ([`SummaryStatistics::keep_read_cells`]).
 #[derive(Debug)]
 struct Record {
     pos: u64,
@@ -139,6 +141,29 @@ struct SummaryStatistics {
     pmid: String,
     study: String,
     accession: String,
+}
+
+impl SummaryStatistics {
+    /// Cuts each record to the four cells [`GwasPlugin::values`] reads, in a
+    /// fixed order, and points the columns at them; a column the header
+    /// lacks stays `None`. The sort before it reads the whole line, which
+    /// decides the record a position's tie keeps (GWAS.pm:426, 464).
+    fn keep_read_cells(&mut self, by_chr: &mut HashMap<String, Vec<Record>>) {
+        let read = [self.p_value, self.beta, self.odds_ratio, self.effect_allele];
+        by_chr
+            .par_iter_mut()
+            .flat_map(|(_, records)| records.par_iter_mut())
+            .for_each(|record| {
+                let cells: Vec<&str> = record.text.split('\t').collect();
+                let kept: Vec<&str> = read
+                    .iter()
+                    .map(|column| column.and_then(|i| cells.get(i).copied()).unwrap_or(""))
+                    .collect();
+                record.text = kept.join("\t").into_boxed_str();
+            });
+        [self.p_value, self.beta, self.odds_ratio, self.effect_allele] =
+            [0, 1, 2, 3].map(|i| read[i].map(|_| i));
+    }
 }
 
 #[derive(Debug)]
@@ -847,7 +872,7 @@ impl BuiltinPlugin for GwasPlugin {
             ));
         }
         let verbose = params.get("verbose").is_some_and(perl_true);
-        let (source, mut by_chr) = if file_type == "curated" {
+        let (mut source, mut by_chr) = if file_type == "curated" {
             (Source::Curated, Self::load_curated(file, verbose)?)
         } else {
             let (columns, by_chr) = Self::load_summary_statistics(file)?;
@@ -855,6 +880,9 @@ impl BuiltinPlugin for GwasPlugin {
         };
         for records in by_chr.values_mut() {
             records.sort_by(|a, b| a.pos.cmp(&b.pos).then_with(|| collate(&a.text, &b.text)));
+        }
+        if let Source::SummaryStatistics(columns) = &mut source {
+            columns.keep_read_cells(&mut by_chr);
         }
         self.table = Some(Table { source, by_chr });
         Ok(())
@@ -1408,6 +1436,33 @@ mod tests {
                  coordinates a summary-statistics file is read by"
             )
         );
+    }
+
+    /// A loaded summary-statistics record holds the four cells the plugin
+    /// writes and no other, so a file of many columns is not held whole: a
+    /// column the header lacks reads as no value, and a row short of a cell
+    /// as an empty one, as they read from the whole line.
+    #[test]
+    fn a_loaded_sstate_record_holds_the_four_cells_it_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = "hm_variant_id\thm_chrom\thm_pos\thm_effect_allele\tp_value\thm_beta\tci_upper\textra\n\
+                    21_1\t21\t9053097\tC\t0.5\t0.25\t0.9\tx\n\
+                    21_2\t21\t14482906\tT\t0.641\n";
+        let path = write(
+            dir.path(),
+            "17463246-GCST000028-EFO_0001360.h.tsv",
+            text,
+            false,
+        );
+        let plugin = loaded(&["type=sstate", &format!("file={path}")]);
+        let table = plugin.table.as_ref().unwrap();
+        let texts: Vec<&str> = table.by_chr["21"].iter().map(|r| &*r.text).collect();
+        assert_eq!(texts, ["0.5\t0.25\t\tC", "0.641\t\t\tT"]);
+        let full = annotate(&plugin, variant("21", 9053097, "G", "C"));
+        assert_eq!(value(&full, "GWAS_p_value"), Some("0.5"));
+        assert_eq!(value(&full, "GWAS_beta_coef"), Some("0.25"));
+        assert_eq!(value(&full, "GWAS_odds_ratio"), Some(""));
+        assert_eq!(value(&full, "GWAS_risk_allele"), Some("C"));
     }
 
     /// A summary-statistics row with an empty cell before `hm_pos` is read by
