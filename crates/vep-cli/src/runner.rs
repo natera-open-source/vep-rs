@@ -2288,7 +2288,8 @@ impl Runner {
     /// The cache's transcript indexes, one lazy slot per chromosome, each
     /// restricted to the run's [`TranscriptSet`] as it loads, before the index
     /// is built over it, and carrying the exons' ids when a `--plugin` argument
-    /// names a plugin that prints them ([`crate::annotator::exon_ids_wanted`]).
+    /// names a plugin that prints them ([`crate::annotator::exon_ids_wanted`]),
+    /// and the SIFT and PolyPhen matrices only under `--sift` or `--polyphen`.
     fn transcript_indexes(
         &self,
         upstream_distance: u64,
@@ -2306,7 +2307,8 @@ impl Runner {
         let transcript_set = TranscriptSet::from_config(&self.config);
         let indexes = indexes
             .with_transcript_set(transcript_set)
-            .with_exon_ids(keep_exon_ids);
+            .with_exon_ids(keep_exon_ids)
+            .with_predictions(self.config.sift.is_some() || self.config.polyphen.is_some());
         if gene_models.is_empty() {
             return Ok(indexes);
         }

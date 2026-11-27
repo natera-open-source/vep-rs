@@ -656,6 +656,9 @@ pub struct LazyTranscriptIndexes {
     /// Whether each load keeps the exons' stable ids on their transcripts
     /// ([`Transcript::exon_ids`]), for a run whose plugins print them.
     keep_exon_ids: bool,
+    /// Whether each load keeps the transcripts' SIFT and PolyPhen matrices,
+    /// for a run that reads them.
+    keep_predictions: bool,
     /// The GENCODE tally of every chromosome this set has loaded, summed as
     /// each load lands ([`Self::gencode_set_warning`]).
     gencode: Mutex<GencodeTally>,
@@ -794,6 +797,7 @@ impl LazyTranscriptIndexes {
             downstream_distance,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest,
             reference: None,
@@ -834,6 +838,14 @@ impl LazyTranscriptIndexes {
     /// consequence reads an exon's id and parsing them is a cost of every load.
     pub(crate) fn with_exon_ids(mut self, keep_exon_ids: bool) -> Self {
         self.keep_exon_ids = keep_exon_ids;
+        self
+    }
+
+    /// Keeps the SIFT and PolyPhen matrices on the transcripts every later
+    /// load reads; on by default, off for a run without `--sift` or
+    /// `--polyphen`, which never reads them.
+    pub(crate) fn with_predictions(mut self, keep_predictions: bool) -> Self {
+        self.keep_predictions = keep_predictions;
         self
     }
 
@@ -920,6 +932,7 @@ impl LazyTranscriptIndexes {
             downstream_distance: self.downstream_distance,
             transcript_set: self.transcript_set,
             keep_exon_ids: self.keep_exon_ids,
+            keep_predictions: self.keep_predictions,
             gencode: Mutex::new(gencode),
             manifest: Arc::clone(&self.manifest),
             reference: Some(Arc::clone(reference)),
@@ -941,6 +954,7 @@ impl LazyTranscriptIndexes {
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -984,6 +998,7 @@ impl LazyTranscriptIndexes {
             downstream_distance,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -1019,6 +1034,7 @@ impl LazyTranscriptIndexes {
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -1167,6 +1183,7 @@ impl LazyTranscriptIndexes {
             &self.manifest,
             Some(&self.transcript_set),
             self.keep_exon_ids,
+            self.keep_predictions,
         )
         .map_err(|cause| ShardUnreadable::from_load(chr, cause))?;
         if let Some(reference) = &self.reference {
@@ -1938,6 +1955,7 @@ mod tests {
             downstream_distance: 5_000,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,

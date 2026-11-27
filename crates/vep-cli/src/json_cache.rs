@@ -496,6 +496,26 @@ thread_local! {
     /// the ids (NearestExonJB). Set by [`parse_shard_transcripts`] for the
     /// duration of its parse, so the loads of one process read their own option.
     static KEEP_EXON_IDS: Cell<bool> = const { Cell::new(false) };
+    /// Whether the shard parse running on this thread keeps each transcript's
+    /// SIFT and PolyPhen matrices: off for a run without `--sift` or
+    /// `--polyphen`, which never reads them and whose shards are mostly their
+    /// bytes. Set by [`parse_shard_transcripts`] for the duration of its parse.
+    static KEEP_PREDICTIONS: Cell<bool> = const { Cell::new(true) };
+}
+
+/// A transcript's `protein_function_predictions` key: read when the parse keeps
+/// the matrices, else consumed and dropped.
+fn deserialize_predictions<'de, D>(
+    deserializer: D,
+) -> Result<Option<JsonProteinFunctionPredictions>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    if KEEP_PREDICTIONS.get() {
+        Option::deserialize(deserializer)
+    } else {
+        serde::de::IgnoredAny::deserialize(deserializer).map(|_| None)
+    }
 }
 
 /// An exon's `stable_id` key: read as an id when the parse keeps them, else
@@ -592,7 +612,7 @@ struct JsonVEFC {
     mapper: Option<JsonMapper>,
     #[serde(default)]
     protein_features: Vec<JsonProteinFeature>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_predictions")]
     protein_function_predictions: Option<JsonProteinFunctionPredictions>,
     #[serde(default)]
     seq_edits: Vec<JsonSeqEdit>,
@@ -1482,17 +1502,22 @@ pub(crate) fn read_shard(path: &Path, manifest: &CacheManifest) -> anyhow::Resul
 /// Under `keep_exon_ids` each exon's `stable_id` is read
 /// ([`Transcript::exon_ids`]), else consumed and dropped; the option holds for
 /// this parse alone ([`KEEP_EXON_IDS`]), a panic inside the parse included.
+/// Under `keep_predictions` the SIFT and PolyPhen matrices are read, else
+/// consumed and dropped ([`KEEP_PREDICTIONS`]).
 fn parse_shard_transcripts(
     data: &[u8],
     keep_exon_ids: bool,
+    keep_predictions: bool,
 ) -> serde_json::Result<Vec<JsonTranscript>> {
     struct ResetOnExit;
     impl Drop for ResetOnExit {
         fn drop(&mut self) {
             KEEP_EXON_IDS.set(false);
+            KEEP_PREDICTIONS.set(true);
         }
     }
     KEEP_EXON_IDS.set(keep_exon_ids);
+    KEEP_PREDICTIONS.set(keep_predictions);
     let _reset = ResetOnExit;
     let first = data
         .iter()
@@ -1557,7 +1582,7 @@ pub(crate) fn transcripts_of_shard_bytes(
     keep_exon_ids: bool,
 ) -> Result<Vec<Transcript>, String> {
     let json_transcripts =
-        parse_shard_transcripts(data, keep_exon_ids).map_err(|error| error.to_string())?;
+        parse_shard_transcripts(data, keep_exon_ids, true).map_err(|error| error.to_string())?;
     let mut codes = AttributeCodes::default();
     json_transcripts
         .into_iter()
@@ -1615,25 +1640,26 @@ pub(crate) fn load_transcripts_in_set(
     manifest: &CacheManifest,
     set: Option<&TranscriptSet>,
 ) -> anyhow::Result<LoadedTranscripts> {
-    load_transcripts_in_set_with(chr, shards, manifest, set, false)
+    load_transcripts_in_set_with(chr, shards, manifest, set, false, true)
 }
 
 /// [`load_transcripts_in_set`] keeping each exon's stable id on its transcript
 /// under `keep_exon_ids` ([`Transcript::exon_ids`]), for a run whose plugins
-/// print the ids.
+/// print the ids, and the SIFT and PolyPhen matrices under `keep_predictions`.
 pub(crate) fn load_transcripts_in_set_with(
     chr: &str,
     shards: &[PathBuf],
     manifest: &CacheManifest,
     set: Option<&TranscriptSet>,
     keep_exon_ids: bool,
+    keep_predictions: bool,
 ) -> anyhow::Result<LoadedTranscripts> {
     let gencode_attribute = set.and_then(TranscriptSet::gencode_attribute);
     let parsed: Vec<anyhow::Result<(Vec<Transcript>, GencodeTally)>> = shards
         .par_iter()
         .map(|path| -> anyhow::Result<(Vec<Transcript>, GencodeTally)> {
             let data = read_shard(path, manifest)?;
-            let json_transcripts = parse_shard_transcripts(&data, keep_exon_ids)
+            let json_transcripts = parse_shard_transcripts(&data, keep_exon_ids, keep_predictions)
                 .with_context(|| format!("Failed to parse {}", path.display()))?;
             let tally = match gencode_attribute {
                 Some(code) => GencodeTally {
@@ -2254,7 +2280,7 @@ pub(crate) fn load_all_transcripts_without_status_lines(
             |(chr, paths)| -> anyhow::Result<(String, LoadedTranscripts)> {
                 Ok((
                     chr.clone(),
-                    load_transcripts_in_set_with(chr, paths, &manifest, set, keep_exon_ids)?,
+                    load_transcripts_in_set_with(chr, paths, &manifest, set, keep_exon_ids, true)?,
                 ))
             },
         )
@@ -4782,7 +4808,7 @@ mod tests {
             )
         );
         let exon_ids = |keep: bool| {
-            let mut parsed = parse_shard_transcripts(shard.as_bytes(), keep).unwrap();
+            let mut parsed = parse_shard_transcripts(shard.as_bytes(), keep, true).unwrap();
             let jt = parsed.pop().unwrap();
             convert_transcript(jt, "21", &mut AttributeCodes::default())
                 .unwrap()
@@ -4795,6 +4821,31 @@ mod tests {
         );
         assert!(!KEEP_EXON_IDS.get(), "the option ends with the parse");
         assert!(exon_ids(false).is_none());
+    }
+
+    /// A shard parse without predictions drops the SIFT and PolyPhen matrices,
+    /// and the option ends with the parse: the next parse on the thread keeps
+    /// them, as every load does unless asked otherwise.
+    #[test]
+    fn a_parse_drops_predictions_for_its_own_duration_alone() {
+        let shard = format!(
+            "[{}]",
+            minimal(
+                r#","variation_effect_feature_cache":{"protein_function_predictions":{"sift":{"analysis":"sift","predictions_data":"AAAA"}}}"#
+            )
+        );
+        let predictions = |keep: bool| {
+            let mut parsed = parse_shard_transcripts(shard.as_bytes(), false, keep).unwrap();
+            let jt = parsed.pop().unwrap();
+            convert_transcript(jt, "21", &mut AttributeCodes::default())
+                .unwrap()
+                .vefc
+                .unwrap()
+                .protein_function_predictions
+        };
+        assert!(predictions(false).is_none());
+        assert!(KEEP_PREDICTIONS.get(), "the option ends with the parse");
+        assert!(predictions(true).is_some_and(|p| p.sift.is_some()));
     }
 
     /// The keys no output or consequence reads (the transcript's `description`,
@@ -4831,7 +4882,7 @@ mod tests {
         let second = minimal(&attributes(&[("TSL", "tsl5"), ("appris", "principal1")]));
         let shard = format!(r#"{{"21":[{first},null,{second}]}}"#);
         let mut codes = AttributeCodes::default();
-        let txs: Vec<Transcript> = parse_shard_transcripts(shard.as_bytes(), false)
+        let txs: Vec<Transcript> = parse_shard_transcripts(shard.as_bytes(), false, true)
             .unwrap()
             .into_iter()
             .map(|jt| convert_transcript(jt, "21", &mut codes).unwrap())
