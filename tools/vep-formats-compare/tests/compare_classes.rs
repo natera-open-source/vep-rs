@@ -1304,18 +1304,29 @@ fn the_collapse_class_accepts_a_transcript_row_the_candidate_alone_writes_on_an_
     );
     let (plain, _) = compare_default(&reference, &candidate, &[]);
     assert_eq!(number(&plain, &["one_sided", "actual_only"]), 1);
-    // A RefSeq cache writes no SOURCE: the row is the class with the field absent.
+    // A RefSeq cache writes no SOURCE: the row is the class with the field absent, where a row
+    // carries the REFSEQ_MATCH that only `--refseq` and `--merged` write (Constants.pm:97-98).
     let without_source = |text: &str| {
         text.replace(";SOURCE=RefSeq", "")
             .replace(";SOURCE=Ensembl", "")
     };
+    let matched = |text: &str| text.replace("STRAND=-1", "STRAND=-1;REFSEQ_MATCH=rseq_mrna_match");
+    assert_eq!(
+        verdict_of(
+            &matched(&without_source(&reference)),
+            &matched(&without_source(&candidate)),
+            &class
+        ),
+        "green"
+    );
+    // Without either field the run is an Ensembl cache's, so the row stays a difference.
     assert_eq!(
         verdict_of(
             &without_source(&reference),
             &without_source(&candidate),
             &class
         ),
-        "green"
+        "red"
     );
     // What a candidate that stays a difference comes to: red, its rows without a counterpart
     // and what the class counted.
@@ -1499,6 +1510,38 @@ fn the_collapse_class_accepts_a_transcript_row_the_candidate_alone_writes_on_an_
         number(&bare, &["columns", "most_severe_consequence", "differing"]),
         1
     );
+}
+
+/// `chr13 60000000 A [CHR17:7675000[A` on an Ensembl cache, no `--merged`: the CSQ format carries
+/// SYMBOL_SOURCE and no SOURCE or REFSEQ_MATCH, so the candidate's mate rows inside TP53 stay
+/// unexpected under the collapse class as without it.
+#[test]
+fn the_collapse_class_leaves_candidate_only_rows_of_a_run_without_refseq_fields() {
+    let klass = "merged_same_stable_id_collapse";
+    let inputs = vec!["chr13\t60000000\tbnd2\tA\t[CHR17:7675000[A\t.\tPASS\t.".to_string()];
+    let own_row = "[CHR17:7675000[A|intron_variant|MODIFIER|PCDH20|Transcript|ENST00000409186|HGNC";
+    let mate_rows = [
+        "[CHR17:7675000[A|intron_variant|MODIFIER|TP53|Transcript|ENST00000269305|HGNC",
+        "[CHR17:7675000[A|intron_variant|MODIFIER|TP53|Transcript|ENST00000359597|HGNC",
+    ];
+    let vcf_entries = |csq: &str| -> Vec<Entry> {
+        let header =
+            csq_header("Allele|Consequence|IMPACT|SYMBOL|Feature_type|Feature|SYMBOL_SOURCE");
+        let text = format!(
+            "{header}#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{}CSQ={csq}\n",
+            record_columns(&inputs[0])
+        );
+        parse_vcf(&text, &inputs).expect("the text parses")
+    };
+    let reference = vcf_entries(own_row);
+    let candidate = vcf_entries(&format!("{own_row},{}", mate_rows.join(",")));
+    for masks in [&[klass][..], &[]] {
+        let mut documented = documented_with(masks);
+        let report = compare(&reference, &candidate, &mut documented);
+        assert_eq!(verdict(&report), "red");
+        assert_eq!(number(&report, &["one_sided", "actual_only"]), 2);
+        assert_eq!(counts(&documented.applied), count_map(&[]));
+    }
 }
 
 const GNOMAD_VEP_CUT: &str = "G|synonymous_variant|LOW|MT-ND1|ENSG00000198888|Transcript|ENST00000361390|protein_coding|1/1||ENST00000361390.2:c.135A>G|ENSP00000354687.2:p.Leu45";

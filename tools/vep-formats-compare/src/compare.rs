@@ -110,6 +110,9 @@ pub const SOURCE_FIELDS: &[&str] = &["SOURCE", "source"];
 
 pub const REFSEQ_SOURCE: &str = "RefSeq";
 
+/// The fields Constants.pm:97-98 adds to a row only under `--refseq` or `--merged`.
+const REFSEQ_MATCH_FIELDS: &[&str] = &["REFSEQ_MATCH", "refseq_match"];
+
 /// The notes of a floor a format cannot count: the JSON format's row-less columns, a custom
 /// source's columns in the JSON format (JSON.pm:249-258 at release/116.3 put a record's custom
 /// annotations, their statistics first, on the record object alone), and a column neither
@@ -793,9 +796,10 @@ fn grouped(entries: &[&Entry], examples: i64) -> Value {
 /// MOTIF_SCORE_CHANGE on a reverse-strand motif entry whose allele is two or more bases,
 /// counted under the class. `MERGED_SAME_STABLE_ID_COLLAPSE` in `documented.masks`
 /// accepts a Transcript entry the candidate alone writes, of a model the reference wrote no row
-/// for on a record it wrote a Transcript row for, its SOURCE RefSeq or absent, once per record
-/// and allele, counted under the class, and leaves such a record's `most_severe_consequence`
-/// uncompared. Each class of `TERM_PAIR_CLASSES` in `documented.masks` accepts the
+/// for on a record it wrote a Transcript row for, its SOURCE RefSeq or absent (absent only
+/// where a reference row carries REFSEQ_MATCH), once per record and allele, counted under the
+/// class, and leaves such a record's `most_severe_consequence` uncompared.
+/// Each class of `TERM_PAIR_CLASSES` in `documented.masks` accepts the
 /// Consequence of a pair its predicate admits, the row counted once and its other fields
 /// compared, and leaves such a record's `most_severe_consequence` uncompared; a predicate is
 /// asked with the coding ends `side.partial_codon_models` holds of the row's transcript. On
@@ -997,6 +1001,13 @@ pub fn compare_entries<'a>(
         // A lost copy's row once per record and allele: a repeat of one is a duplicate, whatever
         // the format's key spells (the text key omits the Uploaded_variation the label carries).
         let mut accepted_rows: HashSet<(String, &str, &str)> = HashSet::new();
+        // A row without SOURCE is a RefSeq cache's only where the reference's rows, those
+        // kept back included, carry REFSEQ_MATCH, which a run under neither `--refseq` nor
+        // `--merged` writes.
+        let refseq_run = REFSEQ_MATCH_FIELDS.iter().any(|f| {
+            expected.iter().any(|e| e.fields.contains_key(*f))
+                || kept.is_some_and(|k| k.populated.get(f) > 0 || k.present.contains(*f))
+        });
         for a in actual {
             if expected_keys.contains(a.key.as_str()) || documented.extra(a) || !transcript_entry(a)
             {
@@ -1013,7 +1024,9 @@ pub fn compare_entries<'a>(
                 .find_map(|f| a.fields.get(*f))
                 .map_or(ABSENT, String::as_str);
             let row = (label, a.allele.as_str(), a.feature.as_str());
-            if (blank(source) || source == REFSEQ_SOURCE) && !accepted_rows.contains(&row) {
+            if ((blank(source) && refseq_run) || source == REFSEQ_SOURCE)
+                && !accepted_rows.contains(&row)
+            {
                 accepted_rows.insert(row);
                 collapsed_rows.insert(&a.key);
                 if let Some(record) = a.record {

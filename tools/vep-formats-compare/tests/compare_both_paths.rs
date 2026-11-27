@@ -1063,3 +1063,48 @@ fn both_paths_agree_on_random_pairs() {
         "{verdicts:?}"
     );
 }
+
+/// `merged_same_stable_id_collapse` reads a row without SOURCE as a RefSeq cache's where the
+/// reference's rows carry REFSEQ_MATCH, which a default-format row writes only where it has a
+/// value: a record kept back whole still tells the run apart, so the stream takes the
+/// candidate's lost copy on another record as the whole outputs do. REFSEQ_MATCH on the
+/// candidate's rows alone names no RefSeq run.
+#[test]
+fn the_collapse_class_reads_a_refseq_run_from_the_reference_whatever_is_kept_back() {
+    let both_paths = BothPaths::new("refseq_run");
+    let klass = "merged_same_stable_id_collapse";
+    let model = "compmerge.264.Heart.chr21";
+    let row = |name: &str, location: &str, feature: &str, extra: &str| {
+        default_row(name, location, "T", feature, "intron_variant", extra)
+    };
+    let matched = row(
+        "r1",
+        "21:100",
+        "NM_1.1",
+        "IMPACT=MODIFIER;STRAND=1;REFSEQ_MATCH=rseq_mrna_match",
+    );
+    let kept = row("r2", "21:200", "NR_1.1", "IMPACT=MODIFIER;STRAND=1");
+    let lost = row("r2", "21:200", model, "IMPACT=MODIFIER;STRAND=1");
+    let reference = [matched.clone(), kept.clone()];
+    let candidate = [matched.clone(), kept.clone(), lost.clone()];
+    let run = both_paths.rows(&reference, &candidate, &["--masks", klass]);
+    assert_eq!((run.out.as_str(), run.code), ("default: green\n", 0));
+    assert!(
+        run.err.contains("1 of 2 record groups handed over"),
+        "{}",
+        run.err
+    );
+    let plain = row("r1", "21:100", "NM_1.1", "IMPACT=MODIFIER;STRAND=1");
+    let self_matched = row(
+        "r2",
+        "21:200",
+        model,
+        "IMPACT=MODIFIER;STRAND=1;REFSEQ_MATCH=rseq_mrna_match",
+    );
+    let run = both_paths.rows(
+        &[plain.clone(), kept.clone()],
+        &[plain, kept, self_matched],
+        &["--masks", klass],
+    );
+    assert_eq!(run.code, 1, "{}", run.out);
+}
