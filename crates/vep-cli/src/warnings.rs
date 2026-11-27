@@ -34,10 +34,11 @@
 
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
+use rustc_hash::FxHashSet;
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
@@ -91,6 +92,10 @@ struct State {
     /// `--input_data` is given: a skip names no line number.
     input_data: bool,
     seen: HashSet<String>,
+    /// The input line number of the last numbered skip and the skip texts
+    /// written for that line: skips arrive in line order, so a numbered skip
+    /// can only repeat a text of its own line and never enters `seen`.
+    skip_line: Option<(u64, FxHashSet<String>)>,
     /// The skips to list in the skipped-variants file, kept only while one is
     /// reserved: a run without `--skipped_variants_file` holds no skip.
     skipped: Vec<Skipped>,
@@ -128,6 +133,7 @@ impl Default for State {
             echo: false,
             input_data: false,
             seen: HashSet::new(),
+            skip_line: None,
             skipped: Vec::new(),
             skipped_file: None,
             collected: Vec::new(),
@@ -210,6 +216,12 @@ impl Sink {
         if !state.seen.insert(dedup_key(&text)) {
             return;
         }
+        Self::write_unseen(state, text, line_number);
+    }
+
+    /// Writes a finished text that has passed its seen check, as
+    /// [`Sink::write_to`] describes.
+    fn write_unseen(state: &mut State, text: String, line_number: Option<u64>) {
         match state.target.clone() {
             Target::Stderr => crate::stderr::write(format_args!("{text}")),
             Target::Memory => state.collected.push((line_number, text.clone())),
@@ -237,9 +249,10 @@ impl Sink {
     /// `skipped_variant_msg` (BaseVEP.pm:840-863): warns about a record the run
     /// drops and records it for the skipped-variants file when one is reserved.
     /// `line` is the input line, `line_number` Ensembl VEP's count of data records
-    /// read. The warning passes through the seen set like any other (`line N
-    /// skipped` opens the text, so the trailing-number rule never strips the
-    /// number): two records are two lines, and two copies of one record, as
+    /// read. A `variant skipped` warning passes through the seen set like any
+    /// other. A numbered one is checked against the texts of its own line alone
+    /// (`line N skipped` opens the text, so it cannot repeat another line's):
+    /// two records are two lines, and two copies of one record, as
     /// `--individual` makes them, are one.
     pub fn skipped_variant(&self, description: &str, line_number: Option<u64>, line: Option<&str>) {
         let line = line.map(quoted_line);
@@ -252,8 +265,19 @@ impl Sink {
             Some(n) => format!("WARNING: line {n} skipped {described}\n"),
             None => format!("WARNING: variant skipped {described}\n"),
         };
-        self.warn_about_line(&text, line_number);
         let mut state = self.lock();
+        match numbered {
+            Some(n) => {
+                if state.skip_line.as_ref().is_none_or(|(line, _)| *line != n) {
+                    state.skip_line = Some((n, FxHashSet::default()));
+                }
+                let texts = &mut state.skip_line.as_mut().expect("set above").1;
+                if texts.insert(dedup_key(&text)) {
+                    Self::write_unseen(&mut state, text, line_number);
+                }
+            }
+            None => Self::write_to(&mut state, &text, line_number),
+        }
         if state.skipped_file.is_some() {
             state.skipped.push(Skipped {
                 line,
@@ -422,14 +446,22 @@ impl Sink {
         self.write_plugin_failures();
         let mut state = self.lock();
         if let Some(path) = state.skipped_file.take() {
-            let mut text = format!("[VEP skipped the following variants from {input_file}]\n");
-            for skip in &state.skipped {
-                text.push_str(&skipped_row(skip));
-            }
-            std::fs::write(&path, text).map_err(|_| skipped_file_unwritable(&path))?;
+            let write = || -> std::io::Result<()> {
+                let mut file = BufWriter::new(File::create(&path)?);
+                writeln!(
+                    file,
+                    "[VEP skipped the following variants from {input_file}]"
+                )?;
+                for skip in &state.skipped {
+                    file.write_all(skipped_row(skip).as_bytes())?;
+                }
+                file.flush()
+            };
+            write().map_err(|_| skipped_file_unwritable(&path))?;
         }
         state.file = None;
         state.seen.clear();
+        state.skip_line = None;
         state.skipped.clear();
         match state.failure.take() {
             Some(message) => Err(CliError::new("output", message)),
@@ -985,8 +1017,8 @@ mod tests {
     }
 
     /// A skip is kept for the skipped-variants file only when one is reserved,
-    /// and every skip line passes through the seen set, as `_seen_warnings` holds
-    /// one entry per skip (BaseVEP.pm:810-813): two records skipped for one
+    /// and each skip line is written once, as `_seen_warnings` holds one entry
+    /// per skip (BaseVEP.pm:810-813): two records skipped for one
     /// reason are two lines, their numbers apart; the identical line a second
     /// `--individual` copy of a record raises is written once; and a `variant
     /// skipped` text repeats once.
@@ -1009,8 +1041,32 @@ mod tests {
         );
         assert_eq!(
             sink.lock().seen.len(),
-            3,
-            "one entry per distinct skip text"
+            1,
+            "a numbered skip is held for its own line, not in the seen set"
+        );
+    }
+
+    /// The `--individual` copies of one input line arrive together, so a
+    /// numbered skip is checked against the texts of its own line alone: the
+    /// copies of a line repeat no text whatever their order, and a later line's
+    /// text is written whatever the earlier lines said.
+    #[test]
+    fn numbered_skips_are_written_once_per_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let (sink, path) = file_sink(dir.path());
+        sink.skipped_variant("first", Some(4), Some("x"));
+        sink.skipped_variant("second", Some(4), Some("x"));
+        sink.skipped_variant("first", Some(4), Some("x"));
+        sink.skipped_variant("first", Some(5), Some("x"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "WARNING: line 4 skipped (x): first\nWARNING: line 4 skipped (x): second\nWARNING: line 5 skipped (x): first\n"
+        );
+        let state = sink.lock();
+        assert!(state.seen.is_empty());
+        assert_eq!(
+            state.skip_line.as_ref().map(|(n, texts)| (*n, texts.len())),
+            Some((5, 1))
         );
     }
 

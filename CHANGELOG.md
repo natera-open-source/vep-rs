@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Warnings and skipped variants
+  - A run that skips many lines holds each numbered skip warning only for its own line and streams `--skipped_variants_file`, lowering peak memory 42 percent on 1,000,000 skipped synthetic records. (#150)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
