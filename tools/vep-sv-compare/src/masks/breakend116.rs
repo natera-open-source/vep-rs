@@ -145,13 +145,16 @@ pub fn filter_bnd_own_rows_lost(sides: &Sides<'_>, cache: &CacheAuthority) -> Tu
 /// (AnnotationType/Transcript.pm 116.2:134), so the reference writes no mate row. The
 /// scored engine resolves either name through the synonym table and writes the mate rows.
 ///
-/// At a Location where the reference wrote at least one tuple, for a bracket allele the
-/// reference wrote no tuple under and whose mate name, read as the reference reads it
-/// ([`reference_mate_chromosome`]), is no chromosome of the cache: every scored-only
-/// Transcript tuple under that allele whose transcript the cache files on the chromosome
-/// the scored engine resolved the name to (`N[Chr21:30425700[` on chromosome 21) or, for a
-/// name the cache files no chromosome under (`NC_000022.11`), whose transcript is not on
-/// the Location's own chromosome. Without a cache nothing is set aside.
+/// For a bracket allele the reference wrote no tuple under and whose mate name, read as the
+/// reference reads it ([`reference_mate_chromosome`]), is no chromosome of the cache: at a
+/// Location where the reference wrote at least one tuple, every scored-only Transcript tuple
+/// under that allele whose transcript the cache files on the chromosome the scored engine
+/// resolved the name to (`N[Chr21:30425700[` on chromosome 21) or, for a name the cache files
+/// no chromosome under (`NC_000022.11`), whose transcript is not on the Location's own
+/// chromosome. At a Location where the reference wrote nothing, which it does when the own
+/// end reaches no transcript either (`C[CHR17:7675000[` at 13:31613634), every such tuple
+/// whose transcript lies on the mate's chromosome within [`BREAKEND_FEATURE_DISTANCE`] of the
+/// mate. Without a cache nothing is set aside.
 pub fn filter_bnd_synonym_mate_rows(sides: &Sides<'_>, cache: &CacheAuthority) -> TupleSet {
     if cache.by_chr.is_empty() {
         return TupleSet::new();
@@ -162,14 +165,12 @@ pub fn filter_bnd_synonym_mate_rows(sides: &Sides<'_>, cache: &CacheAuthority) -
         let Some(own) = chromosome_of_location(sides.strings.text(location)) else {
             continue;
         };
-        if sides.perl.with_prefix(&[location]).is_empty() {
-            continue;
-        }
+        let reference_wrote_here = !sides.perl.with_prefix(&[location]).is_empty();
         let local = cache.transcripts(own);
         for tuple in rust_here {
             let allele = sides.strings.text(tuple.allele());
             let transcript = sides.strings.text(tuple.feature());
-            let Some((mate, _)) = bracket_mate(allele) else {
+            let Some((mate, mate_position)) = bracket_mate(allele) else {
                 continue;
             };
             let reference_resolves_the_name = reference_mate_chromosome(allele)
@@ -183,6 +184,13 @@ pub fn filter_bnd_synonym_mate_rows(sides: &Sides<'_>, cache: &CacheAuthority) -
                 continue;
             }
             let lost = match cache.transcripts(mate) {
+                // A record the reference wrote nothing for: the mate's own admission rule.
+                _ if !reference_wrote_here => decimal_value(mate_position)
+                    .zip(cache.span(mate, transcript))
+                    .is_some_and(|(at, (start, end))| {
+                        start.saturating_sub(BREAKEND_FEATURE_DISTANCE) <= at
+                            && at <= end.saturating_add(BREAKEND_FEATURE_DISTANCE)
+                    }),
                 Some(resolved) => resolved.contains(transcript),
                 None => !local.is_some_and(|local| local.contains(transcript)),
             };
@@ -639,10 +647,33 @@ mod tests {
             assert_eq!(lost(&perl, &rust, &cache()), [[""; 5]; 0]);
         }
 
+        /// `13 31613634 C C[CHR17:7675000[`: the own end reaches no transcript and
+        /// the mate name no chromosome, so the reference writes nothing at the Location; the
+        /// scored engine's mate rows of a transcript within 5,000 bases of the mate are set
+        /// aside, and one farther away, or a run whose cache holds no span, stays charged.
         #[test]
-        fn test_a_record_the_reference_wrote_nothing_for_is_the_skipped_class_not_this_one() {
-            let rust = [t(LOC, SYN, "ENST22_M", "intron_variant")];
-            assert_eq!(lost(&[], &rust, &cache()), [[""; 5]; 0]);
+        fn test_the_mate_rows_of_a_record_the_reference_wrote_nothing_for_are_excluded() {
+            let mut cache = cache();
+            for (id, span) in [
+                ("ENST22_M", (26040000, 26050000)),
+                ("ENST22_FAR", (26050000, 26060000)),
+            ] {
+                cache
+                    .by_chr
+                    .get_mut("22")
+                    .expect("22")
+                    .insert(id.to_string());
+                cache
+                    .spans
+                    .entry("22".to_string())
+                    .or_default()
+                    .insert(id.to_string(), span);
+            }
+            let near = t(LOC, "N[CHR22:26037668[", "ENST22_M", "intron_variant");
+            let far = t(LOC, "N[CHR22:26037668[", "ENST22_FAR", "intron_variant");
+            let expected = [near.clone()];
+            assert_eq!(lost(&[], &[near.clone(), far], &cache), expected);
+            assert_eq!(lost(&[], &[near], &self::cache()), [[""; 5]; 0]);
         }
 
         #[test]

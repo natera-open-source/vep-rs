@@ -1840,6 +1840,82 @@ pub fn filter_bnd_own_rows_lost(
     excluded
 }
 
+/// A bracket breakend's mate rows lost to a mate chromosome spelled in a way the reference
+/// does not resolve (`tools/vep-sv-compare`'s `filter_bnd_synonym_mate_rows`).
+///
+/// THE SHAPE. The reference strips a lower-case `chr` from the mate's name and keeps any other
+/// spelling (StructuralVariationOverlap.pm 116:86-103), so `[CHR17:7675000[` or `Chr21` names
+/// no chromosome of the cache; `_close_to_feature`'s name test (Utils/VariationEffect.pm
+/// 116:111-124) then refuses every transcript of the mate, and the reference writes no mate
+/// row. Where the record's own end reaches no transcript either, it writes no CSQ at all. The
+/// candidate resolves the name through the synonym table and writes the mate rows.
+///
+/// THE PREDICATE: a candidate-only Transcript tuple under a bracket allele the reference wrote
+/// no tuple under at the Location, whose mate name as the reference reads it is no chromosome
+/// of the cache. Where the reference wrote a tuple at the Location, the transcript is on the
+/// chromosome the candidate resolved the mate to or, for a name the cache files nowhere, not
+/// on the Location's own chromosome. Where it wrote none, the transcript is on the mate's
+/// chromosome within `_BREAKEND_FEATURE_DISTANCE` of the mate (StructuralVariationOverlap.pm
+/// 116:144-160). With no cache it excludes nothing.
+pub fn filter_bnd_synonym_mate_rows(
+    perl_tuples: &BTreeSet<AnnotTuple>,
+    rust_tuples: &BTreeSet<AnnotTuple>,
+    transcripts_by_chr: &IndexMap<String, BTreeSet<StableId>>,
+    transcript_spans: &IndexMap<(String, StableId), TranscriptSpan>,
+) -> BTreeSet<AnnotTuple> {
+    let mut excluded: BTreeSet<AnnotTuple> = BTreeSet::new();
+    if transcripts_by_chr.is_empty() {
+        return excluded;
+    }
+    let perl_by_loc = by_location(perl_tuples.iter());
+    let no_tuples = Vec::new();
+    for (loc, rust_here) in &by_location(one_sided(rust_tuples, perl_tuples)) {
+        let Some(own) = _chromosome_of_location(loc) else {
+            continue;
+        };
+        let perl_here = perl_by_loc.get(loc).unwrap_or(&no_tuples);
+        for t in rust_here {
+            let Some((mate, mate_pos)) = _bracket_mate(&t.1) else {
+                continue;
+            };
+            let resolved = _BRACKET_MATE_RE
+                .captures(&t.1)
+                .map(|found| {
+                    found[1]
+                        .strip_prefix("chr")
+                        .unwrap_or(&found[1])
+                        .to_string()
+                })
+                .is_some_and(|name| transcripts_by_chr.contains_key(&name));
+            if resolved || t.2 == "-" || perl_here.iter().any(|p| p.1 == t.1) {
+                continue;
+            }
+            let id = StableId::text(&t.2);
+            let on = |chrom: &str| {
+                transcripts_by_chr
+                    .get(chrom)
+                    .is_some_and(|ids| ids.contains(&id))
+            };
+            let lost = if perl_here.is_empty() {
+                let reach = Int::from(_BREAKEND_FEATURE_DISTANCE);
+                transcript_spans
+                    .get(&(mate.clone(), id.clone()))
+                    .is_some_and(|span| {
+                        minus(span.1, reach) <= mate_pos && mate_pos <= plus(span.2, reach)
+                    })
+            } else if transcripts_by_chr.contains_key(&mate) {
+                on(&mate)
+            } else {
+                !on(&own)
+            };
+            if lost {
+                excluded.insert((*t).clone());
+            }
+        }
+    }
+    excluded
+}
+
 /// The structural-variant comparator's tuple: Location, Allele, Feature, Feature_type and the
 /// Consequence set.
 pub type StructuralTuple = (String, String, String, String, String);

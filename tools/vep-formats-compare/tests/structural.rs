@@ -768,6 +768,47 @@ fn a_mate_side_row_read_at_the_local_coordinate_is_set_aside_as_a_pair() {
     );
 }
 
+/// A mate spelled `CHR22` names no chromosome to the reference (StructuralVariationOverlap.pm
+/// :86-103), so it writes no mate row, and where the own end reaches no transcript it writes
+/// no CSQ at all, as for `chr13 31613634 C C[CHR17:7675000[`. A candidate-only mate row of
+/// a transcript on the mate's chromosome within 5,000 bases of the mate is the class, and the
+/// record's CSQ_present is left uncompared; a mate the reference resolves, a transcript
+/// farther from the mate stay differences.
+#[test]
+fn the_mate_rows_of_a_record_the_reference_wrote_no_csq_for_are_set_aside() {
+    let directory = scratch("structural-synonym-mate");
+    let csq_header = "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. \
+                      Format: Allele|Consequence|Feature_type|Feature|DISTANCE\">\n";
+    let cache = breakend_cache(&directory.join("cache"));
+    let judged = |mate: &str| -> (String, std::collections::BTreeMap<String, i64>) {
+        let record = format!("21\t150000\tbnd3\tN\tN{mate}\t.\t.\tSVTYPE=BND");
+        let vcf_input = structural_input(&directory.join("in.vcf"), &[record.as_str()]);
+        let inputs = whole_records(&vcf_input);
+        let side = side_of(structural(&[OWN_ROWS], Some(&vcf_input), Some(&cache)));
+        let line = &inputs[0];
+        let mut documented = documented_with(&[OWN_ROWS]);
+        let report = compare_beside(
+            &side,
+            &parse_vcf(&format!("{csq_header}{line}\n"), &inputs).expect("the reference parses"),
+            &parse_vcf(
+                &format!(
+                    "{csq_header}{line};CSQ=N{mate}|upstream_gene_variant|Transcript|ENST22|100\n"
+                ),
+                &inputs,
+            )
+            .expect("the candidate parses"),
+            &mut documented,
+        );
+        (verdict(&report).to_string(), applied(&documented))
+    };
+    assert_eq!(
+        judged("[CHR22:5000000["),
+        ("green".to_string(), count_map(&[(OWN_ROWS, 1)]))
+    );
+    assert_eq!(judged("[chr22:5000000[").0, "red");
+    assert_eq!(judged("[CHR22:4990000[").0, "red");
+}
+
 /// A mate-chromosome transcript names the record's slice first (AnnotationType/Transcript.pm
 /// :122) and every own-chromosome transcript fails the slice test (:125-143), so the
 /// reference keeps the mate rows and writes nothing under the own-end allele: a

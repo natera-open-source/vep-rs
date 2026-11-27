@@ -42,5 +42,7 @@ tests = [
 ]
 rules = [
     "tools/vep-formats-compare/src/rules/structural.rs::filter_bnd_own_rows_lost",
+    "tools/vep-formats-compare/src/rules/structural.rs::filter_bnd_synonym_mate_rows",
     "tools/vep-sv-compare/src/masks/breakend116.rs::filter_bnd_own_rows_lost",
+    "tools/vep-sv-compare/src/masks/breakend116.rs::filter_bnd_synonym_mate_rows",
 ]

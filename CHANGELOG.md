@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
+### Fixed
+
+- Documentation, test corpora and comparison tools
+  - `bnd_own_chromosome_rows_lost` in `vep-formats-compare` and `vep-sv-compare` sets aside the mate rows of a breakend whose `CHR`-spelled mate Ensembl VEP leaves without CSQ. (#178)
+
 ## [1.0.0] - 2026-11-24
 
 ### Added

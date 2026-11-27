@@ -1126,6 +1126,7 @@ pub fn compare_entries<'a>(
     // rows, set aside where the collapsed rows are. A key a manifest documents is the manifest's.
     let mut skipped = CandidateOnly::default();
     let mut own_rows = CandidateOnly::default();
+    let mut mate_rows = CandidateOnly::default();
     if let Some(variants) = side
         .structural_variants
         .as_ref()
@@ -1199,8 +1200,31 @@ pub fn compare_entries<'a>(
                 &variants.spans,
             );
             candidate_only_rows(documented, &excluded, &mut own_rows);
+            let excluded = structural::filter_bnd_synonym_mate_rows(
+                &perl_tuples,
+                &rust_tuples,
+                &variants.by_chr,
+                &variants.spans,
+            );
+            candidate_only_rows(documented, &excluded, &mut mate_rows);
         }
     }
+    // A record the reference wrote no row for whose every candidate row is a lost row of
+    // `bnd_own_chromosome_rows_lost`: the reference's VCF line carries no CSQ at all.
+    let lost = |key: &str| own_rows.rows.contains(key) || mate_rows.rows.contains(key);
+    // The records with a reference row, or a candidate row the class keeps, in one pass.
+    let written: HashSet<i64> = expected
+        .iter()
+        .chain(actual.iter().filter(|a| !lost(&a.key)))
+        .filter(|e| !record_key(&e.key))
+        .filter_map(|e| e.record)
+        .collect();
+    let rows_lost_whole: HashSet<i64> = mate_rows
+        .records
+        .iter()
+        .copied()
+        .filter(|record| !written.contains(record))
+        .collect();
     let mut stale: Vec<String> = Vec::new();
     // For each manifest item that states `rows_alike`: the rows of its key that carry its
     // field, and those of them on which both engines print one value.
@@ -1312,6 +1336,7 @@ pub fn compare_entries<'a>(
                 || registry_records.contains(&record)
                 || collapsed_records.contains(&record)
                 || own_rows.records.contains(&record)
+                || mate_rows.records.contains(&record)
         });
         // A record that carries a row a class of a coding end took, and no row another
         // mechanism sets aside, has its `most_severe_consequence` derived on each side.
@@ -1334,6 +1359,10 @@ pub fn compare_entries<'a>(
         names.dedup();
         for name in names {
             if record_summary_differs && name == "most_severe_consequence" {
+                continue;
+            }
+            if name == "CSQ_present" && summary_record.is_some_and(|r| rows_lost_whole.contains(&r))
+            {
                 continue;
             }
             if extra_differs && name == "Extra" {
@@ -1594,6 +1623,8 @@ pub fn compare_entries<'a>(
             ))
         } else if own_rows.rows.contains(a.key.as_str()) {
             Some((BND_OWN_CHROMOSOME_ROWS_LOST, "candidate-only own-end row"))
+        } else if mate_rows.rows.contains(a.key.as_str()) {
+            Some((BND_OWN_CHROMOSOME_ROWS_LOST, "candidate-only mate row"))
         } else {
             None
         };
