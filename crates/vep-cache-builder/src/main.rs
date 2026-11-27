@@ -78,6 +78,7 @@ use std::process::ExitCode;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use rayon::prelude::*;
 use tracing::{info, warn};
 use vep_core::stderr;
 
@@ -96,6 +97,9 @@ use count::counted;
 /// The flags of a `--auto` installation; every flag of a build named one input
 /// at a time is refused beside any of them.
 const INSTALL_FLAGS: [&str; 3] = ["auto", "dir_cache", "site"];
+
+/// The most chromosomes whose variation files are written at once.
+const CHROMOSOMES_IN_FLIGHT: usize = 4;
 
 #[derive(Parser)]
 #[command(name = "vep-cache-builder", version = env!("CARGO_PKG_VERSION"))]
@@ -1061,16 +1065,23 @@ fn write_variation_files(
     let columns = variation::variation_columns(variation_inputs.genome_wide.frequencies.is_some());
     let mut total_variations = 0usize;
     let mut files = 0usize;
-    for (chrom, vcf) in &variation_inputs.per_chromosome {
-        if from_tables.contains(chrom) {
-            continue;
-        }
+    let from_vcfs: Vec<_> = variation_inputs
+        .per_chromosome
+        .iter()
+        .filter(|(chrom, _)| !from_tables.contains(chrom))
+        .collect();
+    for (chrom, vcf) in &from_vcfs {
         info!(
             "Reading the variation records of chromosome {}: {}",
             chrom,
             vcf.path().display()
         );
-        total_variations += variation::write_chromosome(
+    }
+    // `RAYON_NUM_THREADS=1` sizes the global pool to one, which writes one
+    // chromosome at a time.
+    let threads = CHROMOSOMES_IN_FLIGHT.min(rayon::current_num_threads());
+    let written = write_until_failure(&from_vcfs, threads, |(chrom, vcf)| {
+        variation::write_chromosome(
             chrom,
             vcf,
             &variation_inputs.genome_wide,
@@ -1079,7 +1090,10 @@ fn write_variation_files(
             &columns,
             output_dir,
         )
-        .with_context(|| format!("Failed to write the variation file of chromosome {}", chrom))?;
+        .with_context(|| format!("Failed to write the variation file of chromosome {}", chrom))
+    })?;
+    for records in written.into_iter().flatten() {
+        total_variations += records?;
         files += 1;
     }
 
@@ -1168,10 +1182,69 @@ fn log_lines_carry_colour(terminal: bool, no_color: Option<&std::ffi::OsStr>) ->
     terminal && no_color.is_none_or(std::ffi::OsStr::is_empty)
 }
 
+/// Runs `write` over `items` on a pool of `threads`, starting no item once
+/// one has failed; each item's result is in item order, `None` for an item
+/// not started, so the first error in that order among those that ran is
+/// the one reported. Each chromosome in flight holds its own frequency table,
+/// so the pool is small.
+fn write_until_failure<T: Sync>(
+    items: &[T],
+    threads: usize,
+    write: impl Fn(&T) -> Result<usize> + Sync,
+) -> Result<Vec<Option<Result<usize>>>> {
+    let failed = std::sync::atomic::AtomicBool::new(false);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build()
+        .context("Failed to start the variation writers")?;
+    Ok(pool.install(|| {
+        items
+            .par_iter()
+            .map(|item| {
+                if failed.load(std::sync::atomic::Ordering::Relaxed) {
+                    return None;
+                }
+                let written = write(item);
+                if written.is_err() {
+                    failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                Some(written)
+            })
+            .collect()
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use clap::CommandFactory;
+
+    /// Once an item fails, no item after it starts: on one thread the first
+    /// of three fails, and the other two are not written.
+    #[test]
+    fn a_failed_chromosome_starts_no_other() {
+        let started = std::sync::atomic::AtomicUsize::new(0);
+        let written = write_until_failure(&[1, 2, 3], 1, |item| {
+            started.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if *item == 1 {
+                bail!("chromosome {item}")
+            }
+            Ok(*item)
+        })
+        .unwrap();
+        assert_eq!(started.into_inner(), 1);
+        assert_eq!(written.len(), 3);
+        assert_eq!(
+            written[0]
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap_err()
+                .to_string(),
+            "chromosome 1"
+        );
+        assert!(written[1].is_none() && written[2].is_none());
+    }
 
     /// Colour codes go to a terminal alone, and not there once `NO_COLOR` holds
     /// a value; a file or a pipe takes none whatever the variable holds.

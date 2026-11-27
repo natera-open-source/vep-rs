@@ -911,8 +911,9 @@ fn another_species_is_built_from_its_one_genome_wide_variation_file() {
 /// records on `mitochondrion_genome`, then on `2L`, is logged one `Reading the
 /// variation records of chromosome <name>: <file>` line a sequence, in name
 /// order, and a human chromosome file one line naming `21`. A genome-wide file
-/// whose `2L` records are out of position order ends the build on one error
-/// line that names the sequence the same way.
+/// whose `2L` and `mitochondrion_genome` records are both out of position
+/// order ends the build on one error line, the first sequence's in name order,
+/// that names the sequence the same way.
 #[test]
 fn variation_lines_name_a_sequence_as_the_cache_spells_it() {
     let fixture = fixture_dir();
@@ -1022,7 +1023,9 @@ fn variation_lines_name_a_sequence_as_the_cache_spells_it() {
         .write_all(
             b"2L\t500\trs5\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
               2L\t600\trs6\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
-              2L\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n",
+              2L\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+              mitochondrion_genome\t500\trs8\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+              mitochondrion_genome\t100\trs9\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n",
         )
         .unwrap();
     writer.try_finish().unwrap();
@@ -1142,32 +1145,34 @@ fn variation_lines_count_one_in_the_singular() {
                 .display()
         )
     };
-    assert_eq!(
-        counting_lines(
-            "drosophila_melanogaster",
-            "BDGP6.54",
-            inputs.path(),
-            out.path()
-        ),
-        [
-            " INFO vep_cache_builder: Resolved the variation VCFs of 2 chromosomes".to_string(),
-            format!(
-                " INFO vep_cache_builder::variation: Parsed 2 variations from {} (0 skipped)",
-                genome_vcf.display()
-            ),
-            " INFO vep_cache_builder::variation: chr 2L: 2 variation records".to_string(),
-            wrote("2L", "2 records"),
-            format!(
-                " INFO vep_cache_builder::variation: Parsed 1 variation from {} (0 skipped)",
-                genome_vcf.display()
-            ),
-            " INFO vep_cache_builder::variation: chr mitochondrion_genome: 1 variation record"
-                .to_string(),
-            wrote("mitochondrion_genome", "1 record"),
-            " INFO vep_cache_builder: Variation files written: 3 records across 2 chromosomes"
-                .to_string(),
-        ]
+    // Two chromosomes are written at once, so their lines are compared as a set.
+    let mut lines = counting_lines(
+        "drosophila_melanogaster",
+        "BDGP6.54",
+        inputs.path(),
+        out.path(),
     );
+    lines.sort();
+    let mut expected = [
+        " INFO vep_cache_builder: Resolved the variation VCFs of 2 chromosomes".to_string(),
+        format!(
+            " INFO vep_cache_builder::variation: Parsed 2 variations from {} (0 skipped)",
+            genome_vcf.display()
+        ),
+        " INFO vep_cache_builder::variation: chr 2L: 2 variation records".to_string(),
+        wrote("2L", "2 records"),
+        format!(
+            " INFO vep_cache_builder::variation: Parsed 1 variation from {} (0 skipped)",
+            genome_vcf.display()
+        ),
+        " INFO vep_cache_builder::variation: chr mitochondrion_genome: 1 variation record"
+            .to_string(),
+        wrote("mitochondrion_genome", "1 record"),
+        " INFO vep_cache_builder: Variation files written: 3 records across 2 chromosomes"
+            .to_string(),
+    ];
+    expected.sort();
+    assert_eq!(lines, expected);
 }
 
 /// Ensembl VEP's dumper reads a VCF through ensembl-io's VCF parser
