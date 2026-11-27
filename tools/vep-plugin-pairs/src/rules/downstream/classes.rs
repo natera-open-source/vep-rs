@@ -15,7 +15,7 @@ use crate::pytext;
 use crate::rules::coding_end::coding_end_class;
 use crate::rules::entry::{blank, consequence_set, field_named, field_of, Entry, Row, ABSENT};
 use crate::rules::shared::{
-    digits_value, integer_of, is_integer, notation_indel_length, reverse_complement,
+    digits_value, insertion_row, integer_of, is_integer, notation_indel_length, reverse_complement,
     FRAMESHIFT_TERM, HGVSC_FIELDS, HGVS_OFFSET_FIELDS, STRAND_FIELDS,
 };
 use crate::rules::term_pair::{
@@ -38,6 +38,7 @@ pub const NMD_GATE_TERMS: [&str; 4] = [
     "splice_acceptor_variant",
 ];
 pub const CDS_POSITION_FIELDS: [&str; 3] = ["CDS_position", "cds_start", "cds_end"];
+pub const CODONS_FIELDS: [&str; 2] = ["Codons", "codons"];
 pub const PROTEIN_POSITION_FIELDS: [&str; 3] = ["Protein_position", "protein_start", "protein_end"];
 pub const AMINO_ACIDS_FIELDS: [&str; 1] = ["Amino_acids"];
 pub const BLOSUM62_FIELDS: [&str; 1] = ["BLOSUM62"];
@@ -478,6 +479,58 @@ fn peptide_pair(amino_acids: &str) -> Option<(char, char)> {
     }
 }
 
+/// What TranscriptVariationAllele.pm writes for the bases `allele`, on the transcript's
+/// strand, inserted between the CDS pair `pair`: the reference and alternate peptides and
+/// codons of the window `codon` reads (:841-843, :877), from the codon of the pair's upper
+/// base to that of its lower, `-` for a part of no bases (:878-880), the alternate codons
+/// upper-cased over the allele from `phase` (`display_codon`, :911-923). `None` for a window
+/// of no whole codons or a codon the table does not read.
+pub fn inserted_window(
+    transcript: &DownstreamTranscript,
+    pair: (i128, i128),
+    allele: &str,
+    phase: usize,
+) -> Option<(String, String, String, String)> {
+    let code = transcript.code()?;
+    let from = (codon_span((pair.1, pair.1)).0 - 1) * 3;
+    let to = (codon_span((pair.0, pair.0)).0 * 3).max(from);
+    let split = pair.0.clamp(from, to);
+    let reference = transcript.coding.slice(Some(from), Some(to));
+    let alternate = format!(
+        "{}{allele}{}",
+        transcript.coding.slice(Some(from), Some(split)),
+        transcript.coding.slice(Some(split), Some(to)),
+    );
+    let translated = |bases: &str| -> Option<String> {
+        if bases.is_empty() {
+            return Some("-".to_string());
+        }
+        if !bases.is_ascii() || !bases.len().is_multiple_of(3) {
+            return None;
+        }
+        (0..bases.len())
+            .step_by(3)
+            .map(|at| codon_residue(code, &bases[at..at + 3]))
+            .collect()
+    };
+    let shown = |bases: &str, upper: usize| -> String {
+        if bases.is_empty() {
+            return "-".to_string();
+        }
+        let mut shown = bases.to_ascii_lowercase();
+        let end = (upper + allele.len()).min(shown.len());
+        let start = upper.min(end);
+        shown.replace_range(start..end, &bases[start..end].to_ascii_uppercase());
+        shown
+    };
+    Some((
+        translated(reference)?,
+        translated(&alternate)?,
+        shown(reference, reference.len()),
+        shown(&alternate, phase),
+    ))
+}
+
 /// `hgvs_shift_shared_across_alleles` on the differing field `name` of a later allele's
 /// row: the reference entry `e` is a second or later alternate's whose first allele's row
 /// carries a non-zero HGVS_OFFSET (`first_allele_shift`), the candidate entry `a` prints
@@ -486,7 +539,10 @@ fn peptide_pair(amino_acids: &str) -> Option<(char, char)> {
 /// position is where each entry's is the codons of its pair (`codon_span`) and the two
 /// differ. An `Amino_acids` is on such a row where the two values share their alternate
 /// part and each reference part is the translation of its entry's codons
-/// (`codon_residues`).
+/// (`codon_residues`), `-` for the candidate's insertion between two codons. On an in-frame
+/// insertion's row an `Amino_acids` and a `Codons` are where each side writes
+/// `inserted_window` of its pair, the record's own allele and the own pair's codon phase,
+/// and the reference's `Codons` the candidate's reference part.
 pub fn later_allele_shared_shift(
     e: &Entry,
     a: &Entry,
@@ -532,14 +588,68 @@ pub fn later_allele_shared_shift(
         if transcript.table.is_none() {
             continue;
         }
+        let codons = field_named(name, &CODONS_FIELDS);
+        // An insertion's pair is read either way round; its window runs from the lower base.
+        let ordered = |pair: (i128, i128)| (pair.0.min(pair.1), pair.0.max(pair.1));
+        let (moved, own) = (ordered(moved), ordered(own));
+        // A replacement of two neighbouring bases prints the pair an insertion does.
+        let inserted = insertion_row(e) && e.insertion != Some(false);
+        if inserted
+            && moved.1 == moved.0 + 1
+            && own.1 == own.0 + 1
+            && !e.allele.is_empty()
+            && e.allele.bytes().all(|base| b"ACGT".contains(&base))
+            && e.allele.len().is_multiple_of(3)
+        {
+            let allele = match model.strand {
+                -1 => reverse_complement(&e.allele),
+                _ => e.allele.clone(),
+            };
+            // `display_codon` upper-cases from the codon position of the record's own pair
+            // (TranscriptVariationAllele.pm:913-923), the shared TranscriptVariation's.
+            let phase = usize::try_from((own.1 - 1).rem_euclid(3)).unwrap_or_default();
+            let window = |pair| inserted_window(transcript, pair, &allele, phase);
+            let (Some(moved), Some(own)) = (window(moved), window(own)) else {
+                continue;
+            };
+            let (fields, written, own_written): (&[&str], String, String) = if codons {
+                let own_written = format!("{}/{}", own.2, own.3);
+                (
+                    &CODONS_FIELDS,
+                    format!("{}/{}", own.2, moved.3),
+                    own_written,
+                )
+            } else if field_named(name, &AMINO_ACIDS_FIELDS) {
+                let own_written = format!("{}/{}", own.0, own.1);
+                (
+                    &AMINO_ACIDS_FIELDS,
+                    format!("{}/{}", moved.0, moved.1),
+                    own_written,
+                )
+            } else {
+                continue;
+            };
+            if field_of(e, fields) == written && field_of(a, fields) == own_written {
+                return Ok(true);
+            }
+        }
+        if !field_named(name, &AMINO_ACIDS_FIELDS) {
+            continue;
+        }
         let (reference, _, changed) = pytext::partition(field_of(e, &AMINO_ACIDS_FIELDS), "/");
         let (own_reference, _, own_changed) =
             pytext::partition(field_of(a, &AMINO_ACIDS_FIELDS), "/");
         if changed.is_empty() || changed != own_changed {
             continue;
         }
+        // An insertion between two codons replaces no residue.
+        let between_codons = inserted && (own.0 - own.1).abs() == 1 && own.0.min(own.1) % 3 == 0;
+        let own_read = match between_codons {
+            true => Some("-".to_string()),
+            false => codon_residues(transcript, own_codons),
+        };
         if codon_residues(transcript, moved_codons).as_deref() == Some(reference)
-            && codon_residues(transcript, own_codons).as_deref() == Some(own_reference)
+            && own_read.as_deref() == Some(own_reference)
         {
             return Ok(true);
         }

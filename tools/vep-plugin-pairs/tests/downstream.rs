@@ -3327,3 +3327,138 @@ fn the_shift_an_earlier_allele_left_takes_three_columns_of_a_later_alleles_row()
         );
     }
 }
+
+/// A later allele's row of an in-frame insertion prints, at the pair the first allele's
+/// offset moved, the record's own allele inserted into the moved codon's window
+/// (TranscriptVariationAllele.pm:841-843, :877), upper-cased from the own pair's codon
+/// position (:911-923), and the own pair's reference codons. The rule takes the
+/// Amino_acids and Codons each side writes so, at a codon boundary and inside a codon, on
+/// either strand, as `tools/vep-formats-compare` takes them; a reference part that is not
+/// the moved codon's residue and a window cased otherwise stay differences.
+#[test]
+fn the_shift_an_earlier_allele_left_takes_the_codons_of_an_insertion_read_at_the_moved_pair() {
+    let (_cache, sequences) = sequences_of("shared-shift-codons");
+    // (Location, Feature, strand, first and later alleles, record, the later allele's
+    // reference and candidate cells (CDS, protein, Amino_acids, Codons), the first offset)
+    type Cells<'a> = [&'a str; 4];
+    type Case<'a> = (
+        &'a str,
+        &'a str,
+        &'a str,
+        [&'a str; 2],
+        &'a str,
+        Cells<'a>,
+        Cells<'a>,
+        i64,
+    );
+    let boundary_own: Cells = ["6-7", "2-3", "-/PP", "-/CCCCCC"];
+    let cases: [Case; 3] = [
+        (
+            "21:1006-1007",
+            TOY_FORWARD,
+            "1",
+            ["CCC", "CCCCCC"],
+            "21\t1006\tw\tA\tACCC,ACCCCCC\t.\t.\t.",
+            ["10-11", "4", "L/PPL", "-/CCCCCCctt"],
+            boundary_own,
+            4,
+        ),
+        (
+            "21:1007-1008",
+            TOY_FORWARD,
+            "1",
+            ["CCC", "CCCCCC"],
+            "21\t1007\tw\tA\tACCC,ACCCCCC\t.\t.\t.",
+            ["11-12", "4", "L/LPP", "act/cTCCCCCct"],
+            ["7-8", "3", "T/TPP", "act/aCCCCCCct"],
+            4,
+        ),
+        (
+            "21:2036-2037",
+            TOY_REVERSE,
+            "-1",
+            ["GGG", "GGGGGG"],
+            "21\t2036\tw\tT\tTGGG,TGGGGGG\t.\t.\t.",
+            ["10-11", "4", "L/PPL", "-/CCCCCCctt"],
+            boundary_own,
+            -4,
+        ),
+    ];
+    for (location, feature, strand, alleles, record, reference, candidate, offset) in cases {
+        let row = |allele: &str, [cds, protein, amino_acids, codons]: Cells| {
+            default_row(
+                "w",
+                location,
+                allele,
+                feature,
+                "inframe_insertion",
+                ["-", cds, protein, amino_acids, codons],
+                &format!("IMPACT=MODERATE;STRAND={strand};HGVS_OFFSET={offset}"),
+            )
+        };
+        let first: Cells = [candidate[0], candidate[1], "-/X", "-/X"];
+        let taken = |later: Cells| {
+            let reference = parsed(&[row(alleles[0], first), row(alleles[1], later)]);
+            let candidate = parsed(&[row(alleles[0], first), row(alleles[1], candidate)]);
+            let records = RecordRows::new(&reference, &[record]);
+            let rows = records.of(&reference[1]).expect("no refusal");
+            ["Amino_acids", "Codons"]
+                .into_iter()
+                .filter(|name| {
+                    later_allele_shared_shift(
+                        &reference[1],
+                        &candidate[1],
+                        name,
+                        rows.as_deref(),
+                        &sequences,
+                    )
+                    .expect("no refusal")
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(taken(reference), ["Amino_acids", "Codons"], "{record}");
+        let other_residue = format!("K{}", &reference[2][1..]);
+        let shifted = [
+            reference[0],
+            reference[1],
+            other_residue.as_str(),
+            reference[3],
+        ];
+        assert_eq!(taken(shifted), ["Codons"], "{record}");
+        let upper = reference[3].to_ascii_uppercase();
+        let cased = [reference[0], reference[1], reference[2], upper.as_str()];
+        assert_eq!(taken(cased), ["Amino_acids"], "{record}");
+    }
+    // A two-base replacement prints the pair an insertion between its bases prints, and is
+    // no insertion: no window is read for it. The row name spells the record's alleles.
+    let row = |allele: &str, [cds, protein, amino_acids, codons]: Cells| {
+        default_row(
+            "21_1006_AA/CCC/CCCCCC",
+            "21:1006-1007",
+            allele,
+            TOY_FORWARD,
+            "inframe_insertion",
+            ["-", cds, protein, amino_acids, codons],
+            "IMPACT=MODERATE;STRAND=1;HGVS_OFFSET=4",
+        )
+    };
+    let first: Cells = [boundary_own[0], boundary_own[1], "-/X", "-/X"];
+    let reference = parsed(&[
+        row("CCC", first),
+        row("CCCCCC", ["10-11", "4", "L/PPL", "-/CCCCCCctt"]),
+    ]);
+    let candidate = parsed(&[row("CCC", first), row("CCCCCC", boundary_own)]);
+    let records = RecordRows::new(&reference, &["21\t1006\tw\tAA\tCCC,CCCCCC\t.\t.\t."]);
+    let rows = records.of(&reference[1]).expect("no refusal");
+    for name in ["Amino_acids", "Codons"] {
+        let taken = later_allele_shared_shift(
+            &reference[1],
+            &candidate[1],
+            name,
+            rows.as_deref(),
+            &sequences,
+        )
+        .expect("no refusal");
+        assert!(!taken, "{name}");
+    }
+}

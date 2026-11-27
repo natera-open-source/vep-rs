@@ -270,14 +270,16 @@ pub const UTRANNOTATOR_EXISTING_FIELDS: &[&str] = &[
 /// position: a run that keeps statistics reads every allele's consequences, and with them its
 /// peptide, before the record's first row (OutputFactory.pm:347, :1022; Stats.pm:241;
 /// VariationFeature.pm:1000-1002; Utils/VariationEffect.pm:785). The shape
-/// (`later_allele_shared_shift`): a differing CDS_position, Protein_position or Amino_acids
-/// on the row of a second or later alternate allele of its record (`later_alternate`) whose
+/// (`later_allele_shared_shift`): a differing CDS_position, Protein_position, Amino_acids or
+/// Codons on the row of a second or later alternate allele of its record (`later_alternate`) whose
 /// first allele's reference row on the feature carries a non-zero HGVS_OFFSET
 /// (`first_allele_shift`). The candidate prints the record's own CDS pair and the reference
 /// that span moved by the first allele's offset, both mapped through the cache's mapper pairs
 /// (`shifted_pair_readings`). Each side's Protein_position is the codons of its pair, and
 /// the two Amino_acids share their alternate part, each side's reference part the coding
-/// sequence's translation over its codons under the transcript's table. A first allele's row,
+/// sequence's translation over its codons under the transcript's table. On an in-frame
+/// insertion's row run without statistics each side's Amino_acids and Codons are instead the
+/// window `inserted_window` reads at its pair. A first allele's row,
 /// a first allele without an offset, a move of another size, a candidate value that is not the
 /// record's own, any other column, a row whose record's alleles no entry states in order and a
 /// transcript the cache holds without its mapper pairs stay differences; without the cache the
@@ -290,6 +292,8 @@ pub const SHARED_SHIFT_FIELDS: &[&str] = &[
     "protein_start",
     "protein_end",
     "Amino_acids",
+    "Codons",
+    "codons",
 ];
 
 /// ensembl-variation Utils/Constants.pm %OVERLAP_CONSEQUENCES at release/116, SO term to rank.

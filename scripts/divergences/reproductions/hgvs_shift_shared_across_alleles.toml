@@ -34,6 +34,8 @@ vep_rs = ["inframe_insertion,stop_retained_variant,NMD_transcript_variant | 69 |
 none = "vep-rs computes the 3' shift and the coding and protein positions of each allele separately and keeps no positions shared between the alleles of a record, so its ordinary path annotates a later allele at its own positions; the difference is the positions Ensembl VEP leaves cached on the object the alleles share."
 tests = ["crates/vep-cli/tests/consequence_documented_rows.rs::a_later_insertion_allele_is_read_at_its_own_positions"]
 rules = [
+    "tools/vep-formats-compare/src/rules/downstream.rs::inserted_window",
     "tools/vep-formats-compare/src/rules/downstream.rs::later_allele_shared_shift",
+    "tools/vep-plugin-pairs/src/rules/downstream/classes.rs::inserted_window",
     "tools/vep-plugin-pairs/src/rules/downstream/classes.rs::later_allele_shared_shift",
 ]

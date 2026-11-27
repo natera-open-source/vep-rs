@@ -109,7 +109,7 @@ plugin_value_on_reference_skipped_record	63	pHaplo,pTriplo,Existing_InFrame_oORF
 breakend_mate_local_read													1	0								1		
 bnd_own_chromosome_rows_lost													2	1								2		
 transcript_annotator_sibling_allele_rows															0									
-hgvs_shift_shared_across_alleles	50	CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end,Amino_acids													2		11	8						
+hgvs_shift_shared_across_alleles	50	CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end,Amino_acids,Codons,codons													2		11	8						
 blosum62_hgvs_shift_shared_across_alleles	64	BLOSUM62															13	10						
 hgvs_shift_sequence_edge_window	49	HGVSc,hgvsc,HGVSp,hgvsp,HGVS_OFFSET,hgvs_offset,SHIFT_LENGTH,shift_length,cDNA_position,cdna_start,cdna_end,CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end													3									
 frequency_filter_allele_key_order															4	2								116.3
