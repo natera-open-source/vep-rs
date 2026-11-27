@@ -471,6 +471,7 @@ method	vep_io::output::parquet::OrderMonitor::current	fn(&self) -> core::option:
 method	vep_io::output::parquet::OrderMonitor::new	fn(unlisted_rank: i32) -> Self
 method	vep_io::output::parquet::OrderMonitor::observe	fn(&mut self, batch: &vep_io::output::parquet::RowBatch) -> core::result::Result<(), vep_io::output::parquet::UnsortedInput>
 auto traits	vep_io::output::parquet::ParquetDirectoryWriter	!RefUnwindSafe, Send, !Sync, Unpin, !UnwindSafe
+implementation	vep_io::output::parquet::ParquetDirectoryWriter	impl core::ops::drop::Drop for vep_io::output::parquet::ParquetDirectoryWriter
 struct	vep_io::output::parquet::ParquetDirectoryWriter	struct; named fields, some private
 method	vep_io::output::parquet::ParquetDirectoryWriter::block_is_full	fn(&self) -> bool
 method	vep_io::output::parquet::ParquetDirectoryWriter::close	fn(self) -> core::result::Result<(), vep_io::error::IoError>

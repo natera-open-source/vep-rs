@@ -668,7 +668,20 @@ impl ParquetDirectoryWriter {
         let mut steps = self.take_steps(true)?;
         steps.push(EncodeStep::Close);
         self.encoder.encode(steps)?;
-        self.encoder.finish()
+        std::mem::replace(&mut self.encoder, Encoder::Stopped(ENCODER_STOPPED.into())).finish()
+    }
+}
+
+impl Drop for ParquetDirectoryWriter {
+    /// Joins an encoder thread still running, so nothing it encodes reaches
+    /// the directory after the writer is gone; its result and any panic are
+    /// dropped, since the writer may be dropped while unwinding.
+    fn drop(&mut self) {
+        let stopped = Encoder::Stopped(ENCODER_STOPPED.into());
+        if let Encoder::Thread { blocks, thread } = std::mem::replace(&mut self.encoder, stopped) {
+            drop(blocks);
+            let _ = thread.join();
+        }
     }
 }
 
@@ -1579,5 +1592,32 @@ mod tests {
             matches!(error, IoError::Io(_)),
             "the missing directory fails the part's creation: {error}"
         );
+    }
+    /// A writer dropped without closing joins its encoder thread, so the block
+    /// it handed over is written before the drop returns and the directory
+    /// can then be removed with nothing left to recreate it.
+    #[test]
+    fn dropping_a_threaded_writer_joins_its_encoder() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = formatter();
+        let out = dir.path().join("dropped");
+        let pool = thread_pool(1);
+        let (release, busy) = mpsc::channel::<()>();
+        pool.spawn(move || busy.recv().unwrap_or(()));
+        let mut writer = open(&out, &f, checked(&f), None);
+        writer.encode_on_own_thread(Arc::clone(&pool)).unwrap();
+        writer
+            .write(batch(&f, &[("21", 10, 10, 10), ("21", 20, 20, 20)]))
+            .unwrap();
+        writer.encode_pending().unwrap();
+        let releaser = thread::spawn(move || {
+            thread::sleep(std::time::Duration::from_millis(200));
+            release.send(()).unwrap();
+        });
+        drop(writer);
+        assert!(out.join("part-00000.parquet").exists());
+        std::fs::remove_dir_all(&out).unwrap();
+        releaser.join().unwrap();
+        assert!(!out.exists());
     }
 }
