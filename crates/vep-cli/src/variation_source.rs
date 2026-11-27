@@ -517,11 +517,7 @@ impl VariationSource {
         };
         let prefetched = self.prefetched.read().unwrap();
         if let Some(chromosome) = prefetched.get(chr) {
-            let covered = chromosome
-                .windows
-                .iter()
-                .any(|&(window_low, window_high)| window_low <= low && high <= window_high);
-            if covered {
+            if windows_cover(&chromosome.windows, low, high) {
                 return Ok(self.parse_tabix_records(chromosome.records.lookup(chr, low, high)));
             }
         }
@@ -779,6 +775,15 @@ fn start_window(start: u64, end: u64) -> (u64, u64) {
 /// `AnnotationType/Variation.pm:243-245`.
 fn region_window(start: u64, end: u64) -> (u64, u64) {
     (start.min(end).saturating_sub(1), start.max(end) + 1)
+}
+
+/// Whether one of `windows`, sorted and merged ([`merge_windows`]), holds
+/// `low..=high`: only the first window ending at or past `high` can.
+fn windows_cover(windows: &[(u64, u64)], low: u64, high: u64) -> bool {
+    let first = windows.partition_point(|&(_, window_high)| window_high < high);
+    windows
+        .get(first)
+        .is_some_and(|&(window_low, _)| window_low <= low)
 }
 
 /// Sorted windows merged where they overlap or touch.
@@ -1294,6 +1299,20 @@ mod tests {
         );
         assert_eq!(start_window(101, 100), (100, 101));
         assert_eq!(start_window(1, 1), (0, 2));
+    }
+
+    /// The bisection over merged windows answers as a scan of every window
+    /// does, for spans inside, across, between and beyond the windows.
+    #[test]
+    fn windows_cover_answers_as_a_scan_of_every_window() {
+        let windows = merge_windows(&[(10, 20), (21, 25), (40, 50), (60, 60), (70, 90)]);
+        for low in 0..100 {
+            for high in low..100 {
+                let scan = windows.iter().any(|&(l, h)| l <= low && high <= h);
+                assert_eq!(windows_cover(&windows, low, high), scan, "{low}..={high}");
+            }
+        }
+        assert!(!windows_cover(&[], 1, 1));
     }
 
     /// The prefetched answer is the per-variant query's for an insertion, whose

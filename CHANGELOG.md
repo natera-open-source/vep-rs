@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Input formats and records
+  - The streaming coordinator parses only lines holding a bracket or `CHR2` for breakend mates, and `--check_existing` bisects its windows; wall time unchanged within noise on 50,000 chr21 sites, 16 threads. (#189)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 

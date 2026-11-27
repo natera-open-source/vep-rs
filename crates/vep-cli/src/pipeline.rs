@@ -1839,7 +1839,7 @@ fn read_vcf_lines(
             // record); with the flag it is a record of the run ([`non_variant_record`]).
             // One under a true INFO/SVTYPE, which Ensembl VEP annotates as a
             // structural variant (`:237-245`), is warned about by its line.
-            if !cfg.allow_non_variant {
+            if !cfg.allow_non_variant && alt_opens_with_dot(head) {
                 let record = String::from_utf8_lossy(head);
                 if vcf_line_is_non_variant(&record) {
                     if let Some(text) = missing_alt_under_svtype(&record) {
@@ -3915,7 +3915,9 @@ fn batch_chromosomes(
         let chrom = String::from_utf8_lossy(columns.next().unwrap_or(line));
         push(record_naming(&chrom, synonyms, transcripts, source_chromosomes, reference).1);
         let (reference, alt) = (columns.nth(2), columns.next());
-        if !may_name_a_breakend_mate(reference.unwrap_or(b""), alt.unwrap_or(b"")) {
+        if !holds_a_mate_marker(line)
+            || !may_name_a_breakend_mate(reference.unwrap_or(b""), alt.unwrap_or(b""))
+        {
             continue;
         }
         let line = String::from_utf8_lossy(line);
@@ -3926,6 +3928,14 @@ fn batch_chromosomes(
         }
     }
     chrs
+}
+
+/// Whether a VCF line holds a bracket or the text `CHR2`, one of which every
+/// line naming a breakend mate holds: a mate is a bracket part of REF or ALT
+/// or INFO/CHR2 (Parser/VCF.pm:491-497). A spanning deletion's `*` holds
+/// neither, so its line is never parsed for a mate.
+fn holds_a_mate_marker(line: &[u8]) -> bool {
+    line.iter().any(|&b| b == b'[' || b == b']') || line.find(b"CHR2").is_some()
 }
 
 /// Whether a VCF record with the columns `reference` and `alt` can name a
@@ -6408,7 +6418,15 @@ mod tests {
                 may_name_a_breakend_mate(reference.as_bytes(), alt.as_bytes()),
                 "{reference} {alt}"
             );
+            let line = format!("21\t100\tx\t{reference}\t{alt}\t.\t.\t{info}");
+            assert!(holds_a_mate_marker(line.as_bytes()), "{line}");
         }
+        // A spanning deletion under a true SVTYPE passes the column test, and
+        // its line, holding no bracket and no CHR2, names no mate.
+        let star = "21\t100\tx\tA\tG,*\t.\t.\tSVTYPE=DEL;END=100";
+        assert!(may_name_a_breakend_mate(b"A", b"G,*"));
+        assert!(!holds_a_mate_marker(star.as_bytes()));
+        assert!(mates("A", "G,*", "SVTYPE=DEL;END=100").is_empty());
     }
 
     /// The streaming scan warms the chromosome a bare `M` record is annotated
