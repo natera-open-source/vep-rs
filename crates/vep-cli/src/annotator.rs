@@ -1341,6 +1341,9 @@ pub fn annotate_batch(
             variant.intergenic_shift =
                 crate::runner::intergenic_shift(variant, &resources.effects_config);
         }
+        // The verdict before the plugins and filters narrow it, as the runner's
+        // `annotate_one` sets it (BaseVariationFeature.pm:151-170).
+        variant.display_consequence = variant.most_severe_consequence;
     };
 
     let stats = if use_parallel {
@@ -2410,6 +2413,12 @@ mod tests {
                 library[0].iter().any(|row| row == EXPECTED_ROW),
                 "{record}: {:?}",
                 library[0]
+            );
+            let annotated = &library_batch[0];
+            assert!(annotated.most_severe_consequence.is_some(), "{record}");
+            assert_eq!(
+                annotated.display_consequence, annotated.most_severe_consequence,
+                "{record}"
             );
         }
     }
