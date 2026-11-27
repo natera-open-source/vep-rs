@@ -1316,6 +1316,14 @@ fn remove_store(published: &StorePaths) -> Result<()> {
 /// Run the full cache conversion.
 fn convert_cache(json_dir: &Path, output_dir: &str) -> Result<()> {
     let output_path = Path::new(output_dir);
+    // Copying a file onto itself truncates it, so a conversion into its own
+    // source would empty every file it copies.
+    if is_same_file(json_dir, output_path) {
+        bail!(
+            "--output-dir {} is the --json-dir: the conversion would overwrite its own source",
+            output_path.display()
+        );
+    }
     fs::create_dir_all(output_path).context("Failed to create output directory")?;
     // The list replaces this mark as the last write. A conversion that ends
     // before it, even with every file of the cache written, leaves a
@@ -2447,6 +2455,37 @@ mod tests {
             fs::read(dst.join("21/1-1000000_var.gz")).unwrap(),
             record.as_bytes()
         );
+    }
+
+    /// An `--output-dir` that is the `--json-dir`, under any spelling, is
+    /// refused before the conversion writes, removes or truncates a file of
+    /// its own source.
+    #[test]
+    fn conversion_into_its_own_source_is_refused() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(src.join("transcripts")).unwrap();
+        fs::create_dir_all(src.join("variations/21")).unwrap();
+        fs::write(src.join("info.json"), REGULATORY_INFO).unwrap();
+        fs::write(src.join("transcripts/21_1-1000000.json"), b"[]").unwrap();
+        fs::write(src.join("variations/21/all_vars.gz"), b"gz").unwrap();
+        fs::write(src.join("variations/21/all_vars.gz.csi"), b"csi").unwrap();
+        for spelling in [src.clone(), src.join(".")] {
+            let error = convert_cache(&src, spelling.to_str().unwrap()).unwrap_err();
+            assert!(
+                format!("{error:#}").contains("is the --json-dir"),
+                "{error:#}"
+            );
+            assert_eq!(
+                fs::read(src.join("info.json")).unwrap(),
+                REGULATORY_INFO.as_bytes()
+            );
+            assert_eq!(
+                fs::read(src.join("variations/21/all_vars.gz")).unwrap(),
+                b"gz"
+            );
+            assert!(!src.join(vep_core::cache_manifest::MANIFEST_FILE).exists());
+        }
     }
 
     /// A conversion ends with `CHECKSUMS.sha256` in the output directory: one
