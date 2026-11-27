@@ -2213,7 +2213,7 @@ fn perl_substr_assign(s: &mut Vec<u8>, off: i64, len: i64, repl: &[u8]) {
     s.splice(off..stop, repl.iter().copied());
 }
 
-fn is_perl_unambiguous_dna(seq: &[u8]) -> bool {
+pub(crate) fn is_perl_unambiguous_dna(seq: &[u8]) -> bool {
     !seq.is_empty()
         && seq
             .iter()
@@ -2243,7 +2243,7 @@ fn iupac_bases(b: u8) -> &'static [u8] {
 
 /// `Bio::Tools::CodonTable::translate` for one codon: an ambiguous codon resolves
 /// when every expansion agrees, `B` for Asp/Asn and `Z` for Glu/Gln, else `X`.
-fn perl_translate_codon(codon: &[u8], table: u8) -> u8 {
+pub(crate) fn perl_translate_codon(codon: &[u8], table: u8) -> u8 {
     if codon.len() != 3 {
         return b'X';
     }

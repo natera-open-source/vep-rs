@@ -38,6 +38,7 @@
 //! and `Utils.pm`, `OutputFactory.pm` and `OutputFactory/*.pm` (ensembl-vep
 //! release/116.3, `Bio/EnsEMBL/VEP/`).
 
+use crate::coding::{is_perl_unambiguous_dna, perl_translate_codon};
 use smallvec::SmallVec;
 use vep_core::consequence::{OwnSpanPositions, TranscriptConsequence};
 use vep_core::transcript::{ExonCoordMapper, MapperPair, SeqEdit, Transcript, TranscriptMapper};
@@ -448,13 +449,6 @@ pub(crate) fn exon_intron_numbers(
 /// A codon window or peptide: a handful of bases, inline.
 type Bases = SmallVec<[u8; 16]>;
 
-fn is_unambiguous_dna(seq: &[u8]) -> bool {
-    !seq.is_empty()
-        && seq
-            .iter()
-            .all(|b| b"ACGT-".contains(&b.to_ascii_uppercase()))
-}
-
 /// One allele of the variant, as given on the variant's strand
 /// (`variation_feature_seq`).
 struct Allele<'a> {
@@ -589,57 +583,13 @@ fn codon(ctx: &CodingContext, allele: &Allele) -> Option<Bases> {
     Some(alt_cds.substr(codon_cds_start - 1, codon_len + (allele_len - vf_nt_len)))
 }
 
-/// BioPerl's translation of one codon: the table entry for an unambiguous
-/// codon; for an ambiguous one, the amino acid every expansion shares, `B`
-/// for Asp/Asn, `Z` for Glu/Gln, else `X`.
-fn translate_codon(codon: &[u8], table: u8) -> u8 {
-    fn expand(b: u8) -> &'static [u8] {
-        match b.to_ascii_uppercase() {
-            b'A' => b"A",
-            b'C' => b"C",
-            b'G' => b"G",
-            b'T' | b'U' => b"T",
-            b'R' => b"AG",
-            b'Y' => b"CT",
-            b'M' => b"AC",
-            b'K' => b"GT",
-            b'S' => b"CG",
-            b'W' => b"AT",
-            b'H' => b"ACT",
-            b'B' => b"CGT",
-            b'V' => b"ACG",
-            b'D' => b"AGT",
-            _ => b"ACGT",
-        }
-    }
-    let (a, c, g) = (expand(codon[0]), expand(codon[1]), expand(codon[2]));
-    if let ([a], [c], [g]) = (a, c, g) {
-        return vep_core::codon::translate_codon_with_table(&[*a, *c, *g], table);
-    }
-    let mut aas: SmallVec<[u8; 8]> = SmallVec::new();
-    for a in a {
-        for c in c {
-            for g in g {
-                let aa = vep_core::codon::translate_codon_with_table(&[*a, *c, *g], table);
-                if !aas.contains(&aa) {
-                    aas.push(aa);
-                }
-            }
-        }
-    }
-    match aas.len() {
-        1 => aas[0],
-        2 if aas.contains(&b'D') && aas.contains(&b'N') => b'B',
-        2 if aas.contains(&b'E') && aas.contains(&b'Q') => b'Z',
-        _ => b'X',
-    }
-}
-
 /// `TranscriptVariationAllele::peptide` over the allele's codon window.
 fn peptide(ctx: &CodingContext, allele: &Allele, window: Option<&Bases>) -> Option<Bases> {
     // An alternate allele that holds unknown bases is translated on a row
     // that reads its peptide (`coding::unknown_bases_allele_is_translated`).
-    if !is_unambiguous_dna(allele.vf_seq) && (allele.is_reference || !ctx.unknown_alt_translated) {
+    if !is_perl_unambiguous_dna(allele.vf_seq)
+        && (allele.is_reference || !ctx.unknown_alt_translated)
+    {
         return None;
     }
     let codon = window?;
@@ -649,7 +599,7 @@ fn peptide(ctx: &CodingContext, allele: &Allele, window: Option<&Bases>) -> Opti
     let whole_len = codon.len() / 3 * 3;
     let mut pep: Bases = codon[..whole_len]
         .chunks(3)
-        .map(|c| translate_codon(c, ctx.codon_table))
+        .map(|c| perl_translate_codon(c, ctx.codon_table))
         .collect();
     // SeqEdits apply to the reference peptide only, as `coding::peptide` applies them.
     if allele.is_reference {
@@ -1053,7 +1003,7 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         pep_end: coding.pep_end,
         reverse: variant.strand.as_i8() != strand,
         unknown_alt_translated: !variant.reference_allele_row
-            && !is_unambiguous_dna(variant.alt_allele())
+            && !is_perl_unambiguous_dna(variant.alt_allele())
             && crate::coding::unknown_bases_allele_is_translated(variant, transcript),
     };
     let reference = Allele {
@@ -1292,6 +1242,19 @@ mod tests {
         let d = display_fields(&deletion(1052, 1052, "G"), &tx);
         assert_eq!(d.amino_acids.as_deref(), Some("M/X"));
         assert_eq!(d.codons.as_deref(), Some("atG/at"));
+    }
+
+    /// A codon byte outside the IUPAC alphabet, here the `-` left after the
+    /// allele's first is removed, expands to nothing and reads `X`
+    /// (`Bio::Tools::CodonTable::_translate_ambiguous_codon`), as the
+    /// consequence terms read it.
+    #[test]
+    fn a_codon_with_a_non_iupac_byte_translates_as_x() {
+        let tx = forward_transcript();
+        // Between codons 2 and 3 (CDS bases 6 and 7).
+        let d = display_fields(&insertion(1055, "GC--"), &tx);
+        assert_eq!(d.amino_acids.as_deref(), Some("-/XX"));
+        assert_eq!(d.codons.as_deref(), Some("-/GC-G"));
     }
 
     #[test]
@@ -1781,10 +1744,10 @@ mod tests {
 
     #[test]
     fn ambiguous_codons_translate_like_bioperl() {
-        assert_eq!(translate_codon(b"GCN", 1), b'A');
-        assert_eq!(translate_codon(b"RAY", 1), b'B');
-        assert_eq!(translate_codon(b"SAR", 1), b'Z');
-        assert_eq!(translate_codon(b"NNN", 1), b'X');
+        assert_eq!(perl_translate_codon(b"GCN", 1), b'A');
+        assert_eq!(perl_translate_codon(b"RAY", 1), b'B');
+        assert_eq!(perl_translate_codon(b"SAR", 1), b'Z');
+        assert_eq!(perl_translate_codon(b"NNN", 1), b'X');
     }
 
     #[test]
