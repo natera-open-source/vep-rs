@@ -1081,7 +1081,7 @@ fn the_class_stands_in_the_tables_of_the_row_classes_and_of_the_field_classes() 
         .iter()
         .map(|(klass, _)| *klass)
         .collect();
-    assert_eq!(fields.len(), 101);
+    assert_eq!(fields.len(), 102);
     assert_eq!(
         fields[fields.len() - 5..],
         [

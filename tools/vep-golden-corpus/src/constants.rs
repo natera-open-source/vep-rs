@@ -53,7 +53,7 @@ pub const HARNESS_ONLY_MASK_CLASSES: [&str; 4] = [
 /// harness's `CORRECTED_BEHAVIOUR_CLASSES` names every class of this list that a committed
 /// corpus names in `masks`. A class whose defect Ensembl VEP 116.3 or an earlier release
 /// corrects is no class of this list.
-pub const CORRECTED_BEHAVIOUR_CLASSES: [&str; 107] = [
+pub const CORRECTED_BEHAVIOUR_CLASSES: [&str; 108] = [
     "start_cooccurrence_swap",
     "splice_family_swap",
     "gxf_reverse_strand_utr_sequence",
@@ -92,6 +92,7 @@ pub const CORRECTED_BEHAVIOUR_CLASSES: [&str; 107] = [
     "nearest_exon_jb_id_less_exon_fold",
     "nearest_start_site_one_base_above",
     "downstream_reverse_strand_rotation",
+    "shifted_allele_rotation_by_strand",
     "spliceai_chopped_multiallelic",
     "spliceai_multi_entry_cell",
     "plugin_contig_mitochondrial_spelling",

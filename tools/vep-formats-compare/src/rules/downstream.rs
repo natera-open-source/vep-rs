@@ -9,8 +9,12 @@ use crate::classes::DOWNSTREAM_START_PAST_OWN_CODON;
 use crate::classes::DOWNSTREAM_UTR_FRAME_PAST_CODING_END;
 use crate::classes::PLUGIN_HGVS_SHIFTED_CDS_COORDINATES;
 use crate::classes::START_COOCCURRENCE_SWAP;
+use crate::compare::CONSEQUENCE_FIELDS;
 use crate::consts::AMINO_ACIDS_FIELDS;
+use crate::consts::CDNA_POSITION_FIELDS;
 use crate::consts::CDS_POSITION_FIELDS;
+use crate::consts::HGVSC_FIELDS;
+use crate::consts::HGVSP_FIELDS;
 use crate::consts::HGVS_OFFSET_FIELDS;
 use crate::consts::INTEGER_RE_PATTERN;
 use crate::consts::NON_ZERO_INTEGER_RE_PATTERN;
@@ -20,18 +24,21 @@ use crate::consts::STRAND_FIELDS;
 use crate::entry::Entry;
 use crate::error::Error;
 use crate::error::Result;
+use crate::fields::entry_kind;
 use crate::fields::field_named;
 use crate::genetic_codes::{genetic_code, CodonTable, GeneticCode, Reading};
 use crate::pyfmt;
 use crate::pyjson;
 use crate::pyjson::Value;
 use crate::rules::coding_end_pairs::{coding_end_class, AtACodingEnd};
+use crate::rules::edited_model::CODONS_FIELDS;
 use crate::rules::intron_ends::VERSION_SUFFIX_RE;
 use crate::rules::kept_start::start_codon_kept_without_five_prime_utr_pair;
 use crate::rules::record_alleles::earlier_allele_shift;
 use crate::rules::record_alleles::first_allele_shift;
 use crate::rules::record_alleles::later_alternate;
 use crate::rules::registry::registry_class;
+use crate::rules::spelt_in;
 use crate::rules::term_pairs::stop_retained_without_stop_codon_test_pair;
 use crate::rules::transcript_model::int_of_text;
 use crate::rules::transcript_model::TranscriptModel;
@@ -40,6 +47,7 @@ use crate::self_parity::reverse_complement;
 use crate::shared::blank;
 use crate::shared::consequence_set;
 use crate::shared::feature_kind;
+use crate::shared::insertion_row;
 use crate::shared::integer_text_of;
 use crate::shared::ABSENT;
 use crate::shared::FRAMESHIFT_TERM;
@@ -1262,6 +1270,204 @@ pub fn codon_residues(
     Some(residues)
 }
 
+/// What TranscriptVariationAllele.pm writes for the bases `allele`, on the transcript's
+/// strand, inserted between the CDS pair `pair`: the reference and alternate peptides and
+/// codons of the window `codon` reads (:841-843, :877), from the codon of the pair's upper
+/// base to that of its lower, `-` for a part of no bases (:878-880). The peptides are read
+/// as `reading` reads the transcript's code, and the alternate codons are upper-cased over the
+/// allele from `phase` (`display_codon`, :911-923). `None` for a window of no whole codons
+/// or a codon the table does not read.
+pub fn inserted_window(
+    transcript: &DownstreamTranscript,
+    pair: (i64, i64),
+    allele: &str,
+    phase: i64,
+    reading: Reading,
+) -> Option<(String, String, String, String)> {
+    let code = match &transcript.table {
+        CodonTable::Held(table) => genetic_code(*table, reading)?,
+        CodonTable::Lacking(spelt) => crate::uncaught!("{spelt}"),
+    };
+    let from = codon_span((pair.1, pair.1))
+        .0
+        .saturating_sub(1)
+        .saturating_mul(3);
+    let to = codon_span((pair.0, pair.0)).0.saturating_mul(3).max(from);
+    let split = pair.0.clamp(from, to);
+    let reference = pyfmt::slice(&transcript.coding, Some(from), Some(to));
+    let alternate = format!(
+        "{}{allele}{}",
+        pyfmt::slice(&transcript.coding, Some(from), Some(split)),
+        pyfmt::slice(&transcript.coding, Some(split), Some(to)),
+    );
+    let translated = |bases: &str| -> Option<String> {
+        if bases.is_empty() {
+            return Some("-".to_string());
+        }
+        if !bases.len().is_multiple_of(3) {
+            return None;
+        }
+        bases
+            .as_bytes()
+            .chunks(3)
+            .map(|codon| code.amino_acid(codon).map(char::from))
+            .collect()
+    };
+    let shown = |bases: &str, upper: usize| -> String {
+        if bases.is_empty() {
+            return "-".to_string();
+        }
+        let mut shown = bases.to_ascii_lowercase();
+        let end = (upper + allele.len()).min(shown.len());
+        let start = upper.min(end);
+        shown.replace_range(start..end, &bases[start..end].to_ascii_uppercase());
+        shown
+    };
+    let phase = usize::try_from(phase).ok()?;
+    Some((
+        translated(reference)?,
+        translated(&alternate)?,
+        shown(reference, reference.len()),
+        shown(&alternate, phase),
+    ))
+}
+
+/// The values the fields `patterns` name on the entry, under their names in lower case.
+fn named_values<'a>(e: &'a Entry, patterns: &[&str]) -> BTreeMap<String, &'a str> {
+    e.fields
+        .iter()
+        .filter(|(name, _)| field_named(name, patterns))
+        .map(|(name, value)| (pyfmt::lower(name), value.as_str()))
+        .collect()
+}
+
+/// The fields two rows of one coding change agree on, as `unrotated_shifted_insertion`
+/// reads them on a record's only or first allele.
+pub const ONE_CODING_CHANGE_FIELDS: [&[&str]; 4] = [
+    CDNA_POSITION_FIELDS,
+    CDS_POSITION_FIELDS,
+    HGVSC_FIELDS,
+    HGVS_OFFSET_FIELDS,
+];
+
+/// Whether a differing HGVSp pair, `expected_value` of the reference entry `e` and
+/// `actual_value` of the candidate entry `a`, is Ensembl VEP's protein notation read from an
+/// inserted allele it left unrotated: on a reverse-strand transcript `shift_feature_seqs`
+/// turns the allele by its length less the shift (TranscriptVariationAllele.pm:1337-1339),
+/// so a shift longer than the allele turns nothing, where vep-rs turns it by the shift modulo
+/// its length. The row is a `STRAND` -1 Transcript row whose Allele is two or more of the
+/// bases `ACGT` that the two rules leave different, both values name one protein before
+/// their last `:p.`, and the two rows carry one value of each of `shared` and a non-blank
+/// HGVSc beside a non-zero HGVS_OFFSET.
+pub fn unrotated_shifted_insertion(
+    e: &Entry,
+    a: &Entry,
+    expected_value: &str,
+    actual_value: &str,
+    shared: &[&[&str]],
+) -> bool {
+    if feature_kind(&entry_kind(e)) != "transcript" || field_of(Some(e), STRAND_FIELDS) != "-1" {
+        return false;
+    }
+    let allele = e.allele.as_str();
+    if allele.len() < 2 || !spelt_with(allele, "ACGT") {
+        return false;
+    }
+    let (expected_name, _, expected_description) = pyfmt::rpartition(expected_value, ":p.");
+    let (actual_name, _, actual_description) = pyfmt::rpartition(actual_value, ":p.");
+    if expected_name.is_empty()
+        || expected_name != actual_name
+        || expected_description.is_empty()
+        || actual_description.is_empty()
+    {
+        return false;
+    }
+    if shared
+        .iter()
+        .any(|patterns| named_values(e, patterns) != named_values(a, patterns))
+    {
+        return false;
+    }
+    let offset = field_of(Some(e), HGVS_OFFSET_FIELDS);
+    if blank(&field_of(Some(e), HGVSC_FIELDS)) || !WHOLE_INTEGER_RE.is_match(&offset) {
+        return false;
+    }
+    let Some(shift) = int_of_text(&offset).map(i64::unsigned_abs) else {
+        return false;
+    };
+    let length = allele.len();
+    let moved = usize::try_from(shift).unwrap_or(usize::MAX);
+    let turned = |turns: usize| {
+        let at = turns % length;
+        format!("{}{}", &allele[at..], &allele[..at])
+    };
+    moved != 0 && turned(length.saturating_sub(moved)) != turned(length - moved % length)
+}
+
+/// The term Ensembl VEP gives an insertion's peptide pair `amino_acids` (`ref/alt`, `-` for
+/// no residue): inframe_insertion where the alternate peptide begins or ends with the
+/// reference one (Utils/VariationEffect.pm:1125-1127), protein_altering_variant otherwise
+/// (:375-393); `None` for a pair that inserts no residue or names a stop.
+fn inserted_peptide_term(amino_acids: &str) -> Option<&'static str> {
+    let (reference, _, alternate) = pyfmt::partition(amino_acids, "/");
+    let reference = if reference == "-" { "" } else { reference };
+    if alternate.len() <= reference.len() || format!("{reference}{alternate}").contains('*') {
+        return None;
+    }
+    let kept = alternate.starts_with(reference) || alternate.ends_with(reference);
+    Some(match kept {
+        true => "inframe_insertion",
+        false => "protein_altering_variant",
+    })
+}
+
+/// `hgvs_shift_shared_across_alleles` on a later allele's Consequence or HGVSp, the reference
+/// entry `e` beside the candidate entry `a`. A Consequence is where the class takes both
+/// sides' Amino_acids and Codons (`later_allele_shared_shift`) and the two sets differ only in
+/// the term each side's peptide pair gives (`inserted_peptide_term`): a run without
+/// statistics reads a later allele's terms with its row, from the shared object's peptides
+/// (TranscriptVariationAllele.pm:798-830). An HGVSp is written at the allele's own shift
+/// (:1724-1733), so it is where the class takes the row's CDS position and the pair differs by
+/// the rotation alone (`unrotated_shifted_insertion` over the cDNA position, HGVSc and
+/// HGVS_OFFSET).
+fn later_allele_terms_or_notation(
+    e: &Entry,
+    a: &Entry,
+    name: &str,
+    record_rows: Option<&[&Entry]>,
+    sequences: &DownstreamSequences,
+) -> Result<bool> {
+    let taken = |field: &str| later_allele_shared_shift(e, a, field, record_rows, sequences);
+    if field_named(name, HGVSP_FIELDS) {
+        let (ev, av) = (
+            field_of(Some(e), HGVSP_FIELDS),
+            field_of(Some(a), HGVSP_FIELDS),
+        );
+        let shared = [CDNA_POSITION_FIELDS, HGVSC_FIELDS, HGVS_OFFSET_FIELDS];
+        return Ok(
+            unrotated_shifted_insertion(e, a, &ev, &av, &shared) && taken(CDS_POSITION_FIELDS[0])?
+        );
+    }
+    let term = |entry: &Entry| inserted_peptide_term(&field_of(Some(entry), AMINO_ACIDS_FIELDS));
+    let (Some(expected_term), Some(actual_term)) = (term(e), term(a)) else {
+        return Ok(false);
+    };
+    let terms = |entry: &Entry, own: &str| -> Option<BTreeSet<String>> {
+        let mut terms: BTreeSet<String> =
+            consequence_set(&field_of(Some(entry), CONSEQUENCE_FIELDS))
+                .split(',')
+                .map(str::to_string)
+                .collect();
+        terms.remove(own).then_some(terms)
+    };
+    if expected_term == actual_term
+        || terms(e, expected_term).is_none_or(|rest| Some(rest) != terms(a, actual_term))
+    {
+        return Ok(false);
+    }
+    Ok(taken(AMINO_ACIDS_FIELDS[0])? && taken(CODONS_FIELDS[0])?)
+}
+
 /// `hgvs_shift_shared_across_alleles` on the differing field `name` of a later allele's
 /// row: the reference entry `e` is a second or later alternate's whose first allele's row
 /// carries a non-zero HGVS_OFFSET (`first_allele_shift`), the candidate entry `a`
@@ -1270,7 +1476,9 @@ pub fn codon_residues(
 /// position is where each entry's is the codons of its pair (`codon_span`) and the two
 /// differ. An `Amino_acids` is on such a row where the two values share their alternate
 /// part and each reference part is the translation of its entry's codons
-/// (`codon_residues`).
+/// (`codon_residues`). On an in-frame insertion's row an `Amino_acids` and a `Codons` are
+/// where each side writes `inserted_window` of its pair, the record's own allele and the
+/// own pair's codon phase, and the reference's `Codons` the candidate's reference part.
 pub fn later_allele_shared_shift(
     e: &Entry,
     a: &Entry,
@@ -1278,6 +1486,9 @@ pub fn later_allele_shared_shift(
     record_rows: Option<&[&Entry]>,
     sequences: &DownstreamSequences,
 ) -> Result<bool> {
+    if field_named(name, CONSEQUENCE_FIELDS) || field_named(name, HGVSP_FIELDS) {
+        return later_allele_terms_or_notation(e, a, name, record_rows, sequences);
+    }
     let shift = first_allele_shift(e, record_rows);
     let own_pairs = cds_pair_readings(a);
     let printed = cds_pair_readings(e);
@@ -1318,6 +1529,53 @@ pub fn later_allele_shared_shift(
             .table
             .held(&e.feature)
             .map_err(Error::comparator)?;
+        let codons = field_named(name, CODONS_FIELDS);
+        // An insertion's pair is read either way round; its window runs from the lower base.
+        let ordered = |pair: (i64, i64)| (pair.0.min(pair.1), pair.0.max(pair.1));
+        let (moved, own) = (ordered(moved), ordered(own));
+        // A replacement of two neighbouring bases prints the pair an insertion does.
+        let inserted = insertion_row(e) && e.insertion != Some(false);
+        if inserted
+            && moved.1 == moved.0 + 1
+            && own.1 == own.0 + 1
+            && spelt_in(&e.allele, b"ACGT")
+            && e.allele.len().is_multiple_of(3)
+        {
+            let allele = match model.strand {
+                -1 => reverse_complement(&e.allele),
+                _ => e.allele.clone(),
+            };
+            // `display_codon` upper-cases from the codon position of the record's own pair
+            // (TranscriptVariationAllele.pm:913-923), the shared TranscriptVariation's.
+            let phase = (own.1 - 1).rem_euclid(3);
+            let window =
+                |pair, reading| inserted_window(&transcript, pair, &allele, phase, reading);
+            let (Some(moved), Some(own)) = (
+                window(moved, Reading::EnsemblVep),
+                window(own, Reading::VepRs),
+            ) else {
+                continue;
+            };
+            let (fields, written, own_written) = if codons {
+                let own_written = format!("{}/{}", own.2, own.3);
+                (CODONS_FIELDS, format!("{}/{}", own.2, moved.3), own_written)
+            } else if field_named(name, AMINO_ACIDS_FIELDS) {
+                let own_written = format!("{}/{}", own.0, own.1);
+                (
+                    AMINO_ACIDS_FIELDS,
+                    format!("{}/{}", moved.0, moved.1),
+                    own_written,
+                )
+            } else {
+                continue;
+            };
+            if field_of(Some(e), fields) == written && field_of(Some(a), fields) == own_written {
+                return Ok(true);
+            }
+        }
+        if !field_named(name, AMINO_ACIDS_FIELDS) {
+            continue;
+        }
         let amino_acids = field_of(Some(e), AMINO_ACIDS_FIELDS);
         let (reference, _, changed) = pyfmt::partition(&amino_acids, "/");
         let own_amino_acids = field_of(Some(a), AMINO_ACIDS_FIELDS);
@@ -1326,8 +1584,14 @@ pub fn later_allele_shared_shift(
             continue;
         }
         let read = |codons, reading| codon_residues(&transcript, codons, reading);
+        // An insertion between two codons replaces no residue.
+        let between_codons = inserted && (own.0 - own.1).abs() == 1 && own.0.min(own.1) % 3 == 0;
+        let own_read = match between_codons {
+            true => Some("-".to_string()),
+            false => read(own_codons, Reading::VepRs),
+        };
         if read(moved_codons, Reading::EnsemblVep).as_deref() == Some(reference)
-            && read(own_codons, Reading::VepRs).as_deref() == Some(own_reference)
+            && own_read.as_deref() == Some(own_reference)
         {
             return Ok(true);
         }

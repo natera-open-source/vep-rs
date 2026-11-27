@@ -328,7 +328,14 @@ options:
                         frameshift_variant row of a STRAND -1 transcript whose
                         HGVS_OFFSET exceeds the number of bases its HGVSc
                         inserts, duplicates or deletes and is not a multiple
-                        of it), splice_family_swap on the Downstream fields (a
+                        of it), shifted_allele_rotation_by_strand (an HGVSp
+                        naming one protein on both sides, on a STRAND -1
+                        transcript row whose allele of two or more bases the
+                        two engines' rotations by its HGVS_OFFSET leave
+                        different, Ensembl VEP's none once the shift exceeds
+                        the allele, both rows carrying one cDNA and CDS
+                        position, HGVSc and non-zero HGVS_OFFSET),
+                        splice_family_swap on the Downstream fields (a
                         DownstreamProtein or ProteinLengthChange the reference
                         alone fills on a key whose Consequence sets pair by
                         that class's rule, the reference's row a frameshift
@@ -1348,10 +1355,13 @@ options:
                         hgvs_shift_shared_across_alleles (with --json-cache
                         also decided without a manifest on the row of a second
                         or later alternate allele of its record: its
-                        CDS_position, Protein_position and Amino_acids where
-                        the reference prints the record's own coordinates
+                        CDS_position, Protein_position, Amino_acids and Codons
+                        where the reference prints the record's own coordinates
                         moved by the HGVS_OFFSET of the first allele's row and
-                        the candidate the record's own),
+                        the candidate the record's own, its Consequence where
+                        the two sets differ only in the term each side's
+                        Amino_acids gives, and its HGVSp where it differs by
+                        the rotation shifted_allele_rotation_by_strand reads),
                         hgvs_shift_sequence_edge_window (beside
                         --reference-fasta and --json-cache also decided
                         without a manifest: the HGVSc, HGVSp and HGVS_OFFSET

@@ -43,3 +43,6 @@ tests = [
     "crates/vep-effects/src/consequences.rs::tests::used_ref_of_a_shifted_coding_deletion_is_rotated_by_the_shift",
     "crates/vep-effects/src/hgvs.rs::tests::shift_feature_seq_turns_the_written_allele_by_the_transcript_strand_rule",
 ]
+rules = [
+    "tools/vep-formats-compare/src/rules/downstream.rs::unrotated_shifted_insertion",
+]

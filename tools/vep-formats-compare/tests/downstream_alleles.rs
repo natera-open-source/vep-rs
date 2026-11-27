@@ -1276,3 +1276,179 @@ fn plugin_hgvs_shifted_cds_coordinates_reads_an_nmd_under_one_consequence_set_as
         );
     }
 }
+
+/// One row of an in-frame insertion record on a toy transcript: its Location, Allele, CDS
+/// pair, protein position, Amino_acids, Codons, strand and HGVS_OFFSET.
+type InsertionRow<'a> = (&'a str, &'a str, &'a str, &'a str, &'a str, &'a str);
+
+fn insertion_row(
+    location: &str,
+    feature: &str,
+    strand: &str,
+    allele: &str,
+    row: InsertionRow,
+    offset: i64,
+) -> String {
+    let (cds, protein, amino_acids, codons, _, _) = row;
+    with_coding_cells(
+        &default_row(
+            "w",
+            location,
+            allele,
+            feature,
+            "inframe_insertion",
+            &format!("IMPACT=MODERATE;STRAND={strand};HGVS_OFFSET={offset}"),
+        ),
+        &format!("-\t{cds}\t{protein}\t{amino_acids}\t{codons}\t-"),
+    )
+}
+
+/// A later allele's row of an in-frame insertion prints, at the pair the first allele's
+/// offset moved, the record's own allele inserted into the moved codon's window
+/// (TranscriptVariationAllele.pm:841-843, :877), upper-cased from the own pair's codon
+/// position (:911-923), and the own pair's reference codons. The class takes the
+/// Amino_acids and Codons each side writes so, at a codon boundary and inside a codon, on
+/// either strand, as Ensembl VEP 116.3 wrote them for `chr1 149390802 A AGGC,AGGCGGCGGC`,
+/// `chr1 149390803 G GGCG,GGCGGCGGCG` and three ATXN1 records; a window written otherwise
+/// stays a difference.
+#[test]
+fn hgvs_shift_shared_across_alleles_takes_the_codons_of_an_insertion_read_at_the_moved_pair() {
+    let directory = scratch_of("shared-shift-codons");
+    let side = transcripts_of(&downstream_cache(&directory.join("cache")));
+    let once = count_map(&[(SHARED_SHIFT, 1)]);
+    // (Location, Feature, strand, first and later alleles, record, the later allele's
+    // reference row and candidate row, the first allele's offset)
+    type Case<'a> = (
+        &'a str,
+        &'a str,
+        &'a str,
+        [&'a str; 2],
+        &'a str,
+        InsertionRow<'a>,
+        InsertionRow<'a>,
+        i64,
+    );
+    let boundary_own = ("6-7", "2-3", "-/PP", "-/CCCCCC", "", "");
+    let cases: [Case; 3] = [
+        (
+            "21:1006-1007",
+            TOY_FORWARD,
+            "1",
+            ["CCC", "CCCCCC"],
+            "21\t1006\tw\tA\tACCC,ACCCCCC\t.\t.\t.",
+            ("10-11", "4", "L/PPL", "-/CCCCCCctt", "", ""),
+            boundary_own,
+            4,
+        ),
+        (
+            "21:1007-1008",
+            TOY_FORWARD,
+            "1",
+            ["CCC", "CCCCCC"],
+            "21\t1007\tw\tA\tACCC,ACCCCCC\t.\t.\t.",
+            ("11-12", "4", "L/LPP", "act/cTCCCCCct", "", ""),
+            ("7-8", "3", "T/TPP", "act/aCCCCCCct", "", ""),
+            4,
+        ),
+        (
+            "21:2036-2037",
+            TOY_REVERSE,
+            "-1",
+            ["GGG", "GGGGGG"],
+            "21\t2036\tw\tT\tTGGG,TGGGGGG\t.\t.\t.",
+            ("10-11", "4", "L/PPL", "-/CCCCCCctt", "", ""),
+            boundary_own,
+            -4,
+        ),
+    ];
+    for (location, feature, strand, alleles, record, reference, candidate, offset) in cases {
+        let first = (candidate.0, candidate.1, "-/X", "-/X", "", "");
+        let text = |later: InsertionRow| {
+            default_text(&[
+                insertion_row(location, feature, strand, alleles[0], first, offset),
+                insertion_row(location, feature, strand, alleles[1], later, offset),
+            ])
+        };
+        let judged = |reference: InsertionRow| {
+            let (report, _) = compare_record(
+                &text(reference),
+                &text(candidate),
+                &side,
+                &[SHARED_SHIFT],
+                &[record],
+            );
+            (
+                masked(&report, "Amino_acids"),
+                masked(&report, "Codons"),
+                verdict_of(&report).to_string(),
+            )
+        };
+        assert_eq!(
+            judged(reference),
+            (once.clone(), once.clone(), "green".to_string()),
+            "{record}"
+        );
+        // A reference part that is not the moved codon's residue, or another casing of the
+        // window, stays open. The moved residue over the candidate's own alternate residues
+        // is the run with statistics of section 2, which the class takes as well.
+        let other_residue = format!("K{}", &reference.2[1..]);
+        let shared = (
+            reference.0,
+            reference.1,
+            other_residue.as_str(),
+            reference.3,
+            "",
+            "",
+        );
+        assert_eq!(judged(shared).0, BTreeMap::new(), "{record}");
+        let stats_run = format!("{}/{}", &reference.2[..1], &candidate.2[2..]);
+        let stats = (
+            reference.0,
+            reference.1,
+            stats_run.as_str(),
+            reference.3,
+            "",
+            "",
+        );
+        assert_eq!(judged(stats).0, once, "{record}");
+        let upper = reference.3.to_ascii_uppercase();
+        let cased = (
+            reference.0,
+            reference.1,
+            reference.2,
+            upper.as_str(),
+            "",
+            "",
+        );
+        let (amino_acids, codons, _) = judged(cased);
+        assert_eq!(
+            (amino_acids, codons.is_empty()),
+            (once.clone(), true),
+            "{record}"
+        );
+    }
+    // A two-base replacement prints the pair an insertion between its bases prints, and is
+    // no insertion: no window is read for it.
+    let (location, record) = ("21:1006-1007", "21\t1006\tw\tAA\tCCC,CCCCCC\t.\t.\t.");
+    let first = (boundary_own.0, boundary_own.1, "-/X", "-/X", "", "");
+    // The row name spells the record's alleles, as the input line does.
+    let text = |later: InsertionRow| {
+        default_text(&[
+            insertion_row(location, TOY_FORWARD, "1", "CCC", first, 4),
+            insertion_row(location, TOY_FORWARD, "1", "CCCCCC", later, 4),
+        ])
+        .replace("\nw\t", "\n21_1006_AA/CCC/CCCCCC\t")
+    };
+    let moved = ("10-11", "4", "L/PPL", "-/CCCCCCctt", "", "");
+    let (report, _) = compare_record(
+        &text(moved),
+        &text(boundary_own),
+        &side,
+        &[SHARED_SHIFT],
+        &[record],
+    );
+    assert_eq!(
+        (masked(&report, "Amino_acids"), masked(&report, "Codons")),
+        (BTreeMap::new(), BTreeMap::new())
+    );
+}

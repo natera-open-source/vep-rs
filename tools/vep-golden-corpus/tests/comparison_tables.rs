@@ -178,7 +178,7 @@ fn the_class_lists_are_the_columns_of_the_format_comparators_class_file() {
     assert_eq!(file.column("RECODER_CORPUS_MASKS"), RECODER_CLASSES);
     // The field dispatch is functions in the order `classify` asks them, which is no
     // column's order. The classes its functions name are field classes of the comparison,
-    // but for four the comparison's table lacks: three are no row of the file, and one is
+    // but for three the comparison's table lacks: two are no row of the file, and one is
     // a row without a place in any table.
     let field_classes = file.column("FIELD_CLASSES");
     let outside: Vec<&str> = DISPATCH_CLASSES
@@ -191,11 +191,10 @@ fn the_class_lists_are_the_columns_of_the_format_comparators_class_file() {
             fields::MINIMAL_PLUGIN_SEES_THE_REJOINED_RECORD,
             fields::MOTIF_SCORE_REVERSE_STRAND_MNV,
             fields::CELL_TYPE_COMMA_NAMES,
-            hgvs::SHIFTED_ALLELE_ROTATION_BY_STRAND,
         ]
     );
     let rows: Vec<Option<bool>> = outside.iter().map(|class| file.row(class)).collect();
-    assert_eq!(rows, [None, Some(false), None, None]);
+    assert_eq!(rows, [None, Some(false), None]);
     assert_eq!(
         DISPATCH_CLASSES.into_iter().collect::<BTreeSet<_>>().len(),
         DISPATCH_CLASSES.len()

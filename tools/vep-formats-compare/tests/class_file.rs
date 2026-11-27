@@ -85,7 +85,7 @@ fn the_four_tables_of_corrected_behaviours_are_columns_of_the_file() {
     .iter()
     .flat_map(|table| column(&header, &rows, table))
     .collect();
-    assert_eq!(union.len(), 109);
+    assert_eq!(union.len(), 110);
 }
 
 #[test]

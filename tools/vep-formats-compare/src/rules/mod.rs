@@ -79,7 +79,7 @@ use crate::rules::coding_end_pairs::{
 use crate::rules::downstream::{
     blosum62_later_allele_shared_shift, downstream_class_at, field_of, hgnc_id_copy_pair,
     later_allele_shared_shift, nmd_reads_shifted_pair, organelle_peptide_path, positive_shift,
-    DownstreamSequences,
+    unrotated_shifted_insertion, DownstreamSequences, ONE_CODING_CHANGE_FIELDS,
 };
 use crate::rules::edited_model::CODONS_FIELDS;
 use crate::rules::edited_model::{
@@ -841,6 +841,11 @@ pub fn field_class_accepts(
             return Ok(false);
         };
         return Ok(shifted_past_and_off_a_multiple(&offset, length));
+    }
+    if klass == class::SHIFTED_ALLELE_ROTATION_BY_STRAND {
+        return Ok(a.is_some_and(|a| {
+            unrotated_shifted_insertion(e, a, ev, av, &ONE_CODING_CHANGE_FIELDS)
+        }));
     }
     if klass == class::SPLICEAI_CHOPPED_MULTIALLELIC {
         let Some(rows) = record_rows.filter(|_| blank(ev) && !blank(av)) else {

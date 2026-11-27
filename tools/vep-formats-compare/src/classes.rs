@@ -598,6 +598,15 @@ pub const NEAREST_START_SITE_ONE_BASE_ABOVE: &str = "nearest_start_site_one_base
 /// of a `STRAND` -1 transcript whose `HGVS_OFFSET` exceeds the number of bases its HGVSc
 /// inserts, duplicates or deletes and is not a multiple of it.
 pub const DOWNSTREAM_REVERSE_STRAND_ROTATION: &str = "downstream_reverse_strand_rotation";
+/// `shifted_allele_rotation_by_strand` on an HGVSp: TranscriptVariationAllele.pm:1330-1347
+/// rotate a 3'-shifted allele `seq_length - shift_length` places on a reverse-strand
+/// transcript, none once the shift exceeds the allele, and `hgvs_protein` reads its peptide
+/// from those bases (:1778); the candidate rotates by the shift modulo the allele's length.
+/// The shape (`rules::downstream::unrotated_shifted_insertion`), read from the rows alone: a
+/// differing HGVSp naming one protein on both sides, on a `STRAND` -1 Transcript row whose
+/// Allele is two or more of the bases `ACGT` that the two rotations leave different, both
+/// rows stating one cDNA and CDS position, one HGVSc and one non-zero HGVS_OFFSET.
+pub const SHIFTED_ALLELE_ROTATION_BY_STRAND: &str = "shifted_allele_rotation_by_strand";
 /// `spliceai_chopped_multiallelic`: for a record whose allele string holds `-`,
 /// SpliceAI.pm:259-266 rebuild every allele with the anchor base before matching, so a
 /// substitution beside a deletion is compared as a two-base pair, which equals no single-base
@@ -2426,6 +2435,10 @@ pub const NAMES: &[(&str, &str)] = &[
     (
         "DOWNSTREAM_REVERSE_STRAND_ROTATION",
         DOWNSTREAM_REVERSE_STRAND_ROTATION,
+    ),
+    (
+        "SHIFTED_ALLELE_ROTATION_BY_STRAND",
+        SHIFTED_ALLELE_ROTATION_BY_STRAND,
     ),
     (
         "SPLICEAI_CHOPPED_MULTIALLELIC",

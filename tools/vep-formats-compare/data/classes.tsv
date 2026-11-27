@@ -9,9 +9,9 @@ individual_allele_order																						3
 conservation_short_name_spelling																								
 pc_description_text																								
 start_cooccurrence_swap			0																					
-splice_family_swap	31	DownstreamProtein,ProteinLengthChange	1																					
+splice_family_swap	32	DownstreamProtein,ProteinLengthChange	1																					
 gxf_reverse_strand_utr_sequence	0	HGVSp,hgvsp																						
-alternate_codon_past_the_coding_end	84	Codons,codons,Amino_acids,amino_acids																						
+alternate_codon_past_the_coding_end	85	Codons,codons,Amino_acids,amino_acids																						
 organelle_peptide_paths_translation_table	1	HGVSp,hgvsp																						
 conservation_max_text_order	2	Conservation,conservation																						
 gwas_haplotype_cross_product	3	gwas_															0							
@@ -28,7 +28,7 @@ utrannotator_lost_start_after_insertion	13	5UTR_consequence,5utr_consequence,5UT
 utrannotator_gained_start_remade_in_place	14	5UTR_consequence,5utr_consequence,5UTR_annotation,5utr_annotation																						
 utrannotator_frameshift_at_stop_boundary	15	5UTR_consequence,5utr_consequence,5UTR_annotation,5utr_annotation																						
 utrannotator_lost_stop_written_before_stop_codon	16	5UTR_consequence,5utr_consequence,5UTR_annotation,5utr_annotation																						
-utrannotator_without_reference	79	5UTR_consequence,5utr_consequence,5UTR_annotation,5utr_annotation,Existing_InFrame_oORFs,Existing_OutOfFrame_oORFs,Existing_uORFs																						
+utrannotator_without_reference	80	5UTR_consequence,5utr_consequence,5UTR_annotation,5utr_annotation,Existing_InFrame_oORFs,Existing_OutOfFrame_oORFs,Existing_uORFs																						
 nearest_exon_jb_item_order	17	NearestExonJB																						
 loeuf_zero_minimum	18	LOEUF,loeuf																						
 maxentscan_overlapping_windows	19	maxentscan_																						
@@ -39,93 +39,94 @@ gnomadmt_info_value_second_equals	23	gnomad_
 loftee_anc_allele_multiallelic_record	24	LoF,LoF_filter															6	4						
 loftee_first_alt_donor_filter	25	LoF,LoF_filter															7	5						
 loftee_gerp_zoom_level_summary	26	LoF_info,LoF,LoF_filter																						
-loftee_gerp_walk_without_conservation_database	85	LoF,LoF_info,LoF_filter,LoF_flags																						
+loftee_gerp_walk_without_conservation_database	86	LoF,LoF_info,LoF_filter,LoF_flags																						
 nearest_exon_jb_stretch_priming	27	NearestExonJB																						
 nearest_exon_jb_shifted_span	28	NearestExonJB																						
 nearest_exon_jb_id_less_exon_fold	29	NearestExonJB																						
-nearest_start_site_one_base_above	78	NEAREST,nearest																						
+nearest_start_site_one_base_above	79	NEAREST,nearest																						
 downstream_reverse_strand_rotation	30	DownstreamProtein,ProteinLengthChange																						
-spliceai_chopped_multiallelic	32	SpliceAI_,spliceai															8	6						
-spliceai_multi_entry_cell	33	SpliceAI_,spliceai																						
-plugin_contig_mitochondrial_spelling	34	am_,alphamissense,AVI_,BayesDel,cadd_,ClinPred,ada_score,rf_score,LOEUF,loeuf,OpenTargets_,opentargets,PrimateAI,REVEL,SpliceAI_,spliceai,splicevault_,splicevault,gnomad_															9							
-tabix_allele_case_insensitive_match	77	am_,alphamissense,AVI_,cadd_,gnomad_,gwas_,OpenTargets_,opentargets,REVEL,SpliceAI_,spliceai,splicevault_,splicevault																						
-dbnsfp_mitochondrial_record_named_m	80	dbNSFP_															14							
+shifted_allele_rotation_by_strand	31	HGVSp,hgvsp																						
+spliceai_chopped_multiallelic	33	SpliceAI_,spliceai															8	6						
+spliceai_multi_entry_cell	34	SpliceAI_,spliceai																						
+plugin_contig_mitochondrial_spelling	35	am_,alphamissense,AVI_,BayesDel,cadd_,ClinPred,ada_score,rf_score,LOEUF,loeuf,OpenTargets_,opentargets,PrimateAI,REVEL,SpliceAI_,spliceai,splicevault_,splicevault,gnomad_															9							
+tabix_allele_case_insensitive_match	78	am_,alphamissense,AVI_,cadd_,gnomad_,gwas_,OpenTargets_,opentargets,REVEL,SpliceAI_,spliceai,splicevault_,splicevault																						
+dbnsfp_mitochondrial_record_named_m	81	dbNSFP_															14							
 dosage_sensitivity_regulatory_row_warnings							1	Plugin 'DosageSensitivity' went wrong																
 fork_warning_pid_prefix									0															
 json_mismatch_warning_names_no_record									1															
-refseq_edited_model_hgvsc_offset	35	HGVSc,hgvsc																						
-refseq_edited_model_hgvs_offset	39	HGVS_OFFSET,hgvs_offset																						
-refseq_edited_model_shifted_insertion_bases	36	HGVSc,hgvsc																						
-refseq_edited_model_seam_insertion_hgvsc	37	HGVSc,hgvsc																						
-refseq_edited_model_unminimised_allele_hgvsc	38	HGVSc,hgvsc																						
-hgvs_shifted_insertion_clamped_end	41	HGVSc,hgvsc																						
-hgvs_shifted_indel_written_span_gate	42	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset,REFSEQ_OFFSET,refseq_offset																						
-hgvs_intron_offset_abutting_insertion	40	HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
-hgvsp_shifted_indel_written_span_gate	43	HGVSp,hgvsp																						
-hgvsp_shifted_indel_written_span_start_test	95	HGVSp,hgvsp																						
-hgvsp_start_codon_test_past_the_shifted_allele	97	HGVSp,hgvsp																						
-hgvs_shifted_deletion_clamped_span	44	HGVSc,hgvsc,HGVS_IntronStartOffset																						
-hgvs_clipped_reference_against_whole_alternate	45	HGVSc,hgvsc,HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
-hgvs_added_bases_left_at_the_span_end	46	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
-hgvs_insertion_left_where_the_shift_stops	47	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset,HGVSp,hgvsp																						
-hgvs_added_bases_written_outside_the_transcript	48	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
-hgvsp_stop_codon_protein_comparison	51	HGVSp,hgvsp																						
-hgvsp_stop_named_on_incomplete_coding_sequence	52	HGVSp,hgvsp																						
-hgvsp_frameshift_count_past_a_stop_read_as_a_residue	86	HGVSp,hgvsp																						
-hgvsp_frameshift_with_no_changed_residue	90	HGVSp,hgvsp																						
-hgvsp_frameshift_count_at_the_first_residue	92	HGVSp,hgvsp																			9			
-hgvsp_intron_end_insertion	53	HGVSp,hgvsp								0														
-hgvsp_intron_start_insertion	54	HGVSp,hgvsp								1														
-shift_intron_term_unshifted_span	55	Consequence,consequence_terms																						
+refseq_edited_model_hgvsc_offset	36	HGVSc,hgvsc																						
+refseq_edited_model_hgvs_offset	40	HGVS_OFFSET,hgvs_offset																						
+refseq_edited_model_shifted_insertion_bases	37	HGVSc,hgvsc																						
+refseq_edited_model_seam_insertion_hgvsc	38	HGVSc,hgvsc																						
+refseq_edited_model_unminimised_allele_hgvsc	39	HGVSc,hgvsc																						
+hgvs_shifted_insertion_clamped_end	42	HGVSc,hgvsc																						
+hgvs_shifted_indel_written_span_gate	43	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset,REFSEQ_OFFSET,refseq_offset																						
+hgvs_intron_offset_abutting_insertion	41	HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
+hgvsp_shifted_indel_written_span_gate	44	HGVSp,hgvsp																						
+hgvsp_shifted_indel_written_span_start_test	96	HGVSp,hgvsp																						
+hgvsp_start_codon_test_past_the_shifted_allele	98	HGVSp,hgvsp																						
+hgvs_shifted_deletion_clamped_span	45	HGVSc,hgvsc,HGVS_IntronStartOffset																						
+hgvs_clipped_reference_against_whole_alternate	46	HGVSc,hgvsc,HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
+hgvs_added_bases_left_at_the_span_end	47	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
+hgvs_insertion_left_where_the_shift_stops	48	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset,HGVSp,hgvsp																						
+hgvs_added_bases_written_outside_the_transcript	49	HGVSc,hgvsc,HGVS_OFFSET,hgvs_offset,HGVS_IntronStartOffset,HGVS_IntronEndOffset																						
+hgvsp_stop_codon_protein_comparison	52	HGVSp,hgvsp																						
+hgvsp_stop_named_on_incomplete_coding_sequence	53	HGVSp,hgvsp																						
+hgvsp_frameshift_count_past_a_stop_read_as_a_residue	87	HGVSp,hgvsp																						
+hgvsp_frameshift_with_no_changed_residue	91	HGVSp,hgvsp																						
+hgvsp_frameshift_count_at_the_first_residue	93	HGVSp,hgvsp																			9			
+hgvsp_intron_end_insertion	54	HGVSp,hgvsp								0														
+hgvsp_intron_start_insertion	55	HGVSp,hgvsp								1														
+shift_intron_term_unshifted_span	56	Consequence,consequence_terms																						
 mature_mirna_unshifted_span				2																				
 stop_codon_unshifted_span				3																				
-structural_deletion_stop_lost_without_stop_codon	65	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		4																0				
-stop_codon_completed_by_polyadenylation	66	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp,Amino_acids,amino_acids,Codons,codons		5																1	4			
-stop_codon_overlap_without_stop_codon	67	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp,Amino_acids,amino_acids,Codons,codons		6																2	5			
-stop_codon_behind_last_residue_without_stop_codon	68	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		7																3	6			
-start_codon_overlap_without_start_codon	69	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		8																4	7			
-stop_retained_without_stop_codon_test	70	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		9																5				
-stop_codon_overlap_genomic_span	71	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		10																6				
-stop_retained_three_base_stop_codon_test	72	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		11																7				
-stop_codon_removed_without_stop_codon_test	73	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		12																8				
-stop_codon_overlap_insertion_range	74	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		13																9	2			
-cnv_tr_symbolic_loss_named_a_gain	88	Consequence,consequence_terms,IMPACT,impact		15																				
-splice_term_past_the_record_span	76	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		16																11	0			
+structural_deletion_stop_lost_without_stop_codon	66	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		4																0				
+stop_codon_completed_by_polyadenylation	67	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp,Amino_acids,amino_acids,Codons,codons		5																1	4			
+stop_codon_overlap_without_stop_codon	68	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp,Amino_acids,amino_acids,Codons,codons		6																2	5			
+stop_codon_behind_last_residue_without_stop_codon	69	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		7																3	6			
+start_codon_overlap_without_start_codon	70	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		8																4	7			
+stop_retained_without_stop_codon_test	71	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		9																5				
+stop_codon_overlap_genomic_span	72	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		10																6				
+stop_retained_three_base_stop_codon_test	73	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		11																7				
+stop_codon_removed_without_stop_codon_test	74	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		12																8				
+stop_codon_overlap_insertion_range	75	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		13																9	2			
+cnv_tr_symbolic_loss_named_a_gain	89	Consequence,consequence_terms,IMPACT,impact		15																				
+splice_term_past_the_record_span	77	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		16																11	0			
 refseq_edited_model_deleted_span_term				0																				
 refseq_edited_model_tail_term				1																				
-refseq_edited_model_equal_span_insertion_term	75	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		14																10	8			
-refseq_edited_model_deleted_span_codons	57	Consequence,consequence_terms,Codons,codons,Amino_acids,amino_acids																						
-refseq_edited_model_intron_span_coding_reference	56	Consequence,consequence_terms,Codons,codons,Amino_acids,amino_acids,HGVSp,hgvsp																						
-refseq_edited_model_inserted_span_codons	82	Codons,codons,Amino_acids,amino_acids																						
-frequency_filter_zero_value	58	FREQS,freqs														1								116.3
+refseq_edited_model_equal_span_insertion_term	76	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		14																10	8			
+refseq_edited_model_deleted_span_codons	58	Consequence,consequence_terms,Codons,codons,Amino_acids,amino_acids																						
+refseq_edited_model_intron_span_coding_reference	57	Consequence,consequence_terms,Codons,codons,Amino_acids,amino_acids,HGVSp,hgvsp																						
+refseq_edited_model_inserted_span_codons	83	Codons,codons,Amino_acids,amino_acids																						
+frequency_filter_zero_value	59	FREQS,freqs														1								116.3
 merged_same_stable_id_collapse																								
-use_transcript_ref_cache_cdna	83	USED_REF,used_ref,Codons,codons,Amino_acids,amino_acids,Consequence,consequence_terms,IMPACT,impact,HGVSc,hgvsc,HGVSp,hgvsp																						
-refseq_failed_edit_model_hgvsc_offset	89	HGVSc,hgvsc																						
-hgnc_id_copy	59	HGNC_ID,hgnc_id																						
-downstream_utr_frame_past_coding_end	60	DownstreamProtein,downstreamprotein									0	0												
-downstream_start_past_own_codon	61	DownstreamProtein,downstreamprotein									1	1												
-plugin_hgvs_shifted_cds_coordinates	62	DownstreamProtein,downstreamprotein,ProteinLengthChange,proteinlengthchange,NMD,nmd										2					12	9						
-plugin_value_on_reference_skipped_record	63	pHaplo,pTriplo,Existing_InFrame_oORFs,Existing_OutOfFrame_oORFs,Existing_uORFs																						
+use_transcript_ref_cache_cdna	84	USED_REF,used_ref,Codons,codons,Amino_acids,amino_acids,Consequence,consequence_terms,IMPACT,impact,HGVSc,hgvsc,HGVSp,hgvsp																						
+refseq_failed_edit_model_hgvsc_offset	90	HGVSc,hgvsc																						
+hgnc_id_copy	60	HGNC_ID,hgnc_id																						
+downstream_utr_frame_past_coding_end	61	DownstreamProtein,downstreamprotein									0	0												
+downstream_start_past_own_codon	62	DownstreamProtein,downstreamprotein									1	1												
+plugin_hgvs_shifted_cds_coordinates	63	DownstreamProtein,downstreamprotein,ProteinLengthChange,proteinlengthchange,NMD,nmd										2					12	9						
+plugin_value_on_reference_skipped_record	64	pHaplo,pTriplo,Existing_InFrame_oORFs,Existing_OutOfFrame_oORFs,Existing_uORFs																						
 breakend_mate_local_read													1	0								1		
 bnd_own_chromosome_rows_lost													2	1								2		
 transcript_annotator_sibling_allele_rows															0									
-hgvs_shift_shared_across_alleles	50	CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end,Amino_acids													2		11	8						
-blosum62_hgvs_shift_shared_across_alleles	64	BLOSUM62															13	10						
-hgvs_shift_sequence_edge_window	49	HGVSc,hgvsc,HGVSp,hgvsp,HGVS_OFFSET,hgvs_offset,SHIFT_LENGTH,shift_length,cDNA_position,cdna_start,cdna_end,CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end													3									
+hgvs_shift_shared_across_alleles	51	CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end,Amino_acids,Codons,codons,Consequence,consequence_terms,HGVSp,hgvsp													2		11	8						
+blosum62_hgvs_shift_shared_across_alleles	65	BLOSUM62															13	10						
+hgvs_shift_sequence_edge_window	50	HGVSc,hgvsc,HGVSp,hgvsp,HGVS_OFFSET,hgvs_offset,SHIFT_LENGTH,shift_length,cDNA_position,cdna_start,cdna_end,CDS_position,cds_start,cds_end,Protein_position,protein_start,protein_end													3									
 frequency_filter_allele_key_order															4	2								116.3
 minimal_symbolic_alleles															5									
 shift_3prime_shared_predicates															6									
 shift_start_codon_test															7									
 transcript_annotator_insertion_window															1									
-total_length_json_range_end	81	cdna_end,cds_end,protein_end																						
-allele_number_repeated_or_reference_equal_alt	94	ALLELE_NUM,allele_num																						
-stop_codon_settled_before_unknown_bases	87	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp,Amino_acids,amino_acids,HGVS_OFFSET,hgvs_offset		17																12				
-frameshift_inside_a_held_stop_codon	93	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		19																14				
-start_codon_removed_without_five_prime_utr	91	IMPACT,impact,HGVSp,hgvsp		18																13				
-start_codon_kept_without_five_prime_utr	96	IMPACT,impact,HGVSp,hgvsp		20																15				
-loftee_nagnag_site_first_transcript_strand	98	LoF_flags,lof_flags															15	11						
-plugin_value_follows_splice_term_past_the_record_span	99	DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags																			1			
-plugin_value_follows_stop_codon_term_pair	100	DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,REVEL,am_,alphamissense,ClinPred,dbNSFP_																			3			
+total_length_json_range_end	82	cdna_end,cds_end,protein_end																						
+allele_number_repeated_or_reference_equal_alt	95	ALLELE_NUM,allele_num																						
+stop_codon_settled_before_unknown_bases	88	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp,Amino_acids,amino_acids,HGVS_OFFSET,hgvs_offset		17																12				
+frameshift_inside_a_held_stop_codon	94	IMPACT,impact,DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,HGVSp,hgvsp		19																14				
+start_codon_removed_without_five_prime_utr	92	IMPACT,impact,HGVSp,hgvsp		18																13				
+start_codon_kept_without_five_prime_utr	97	IMPACT,impact,HGVSp,hgvsp		20																15				
+loftee_nagnag_site_first_transcript_strand	99	LoF_flags,lof_flags															15	11						
+plugin_value_follows_splice_term_past_the_record_span	100	DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags																			1			
+plugin_value_follows_stop_codon_term_pair	101	DownstreamProtein,ProteinLengthChange,NMD,LoF,LoF_info,LoF_filter,LoF_flags,REVEL,am_,alphamissense,ClinPred,dbNSFP_																			3			
 colocated_list_cut_at_cache_cap																								
 refseq_transcript_entries					0	NM_,NR_,XM_,XR_,NP_,XP_																	0	
 lrg_transcript_entries					1	LRG_																	1	
