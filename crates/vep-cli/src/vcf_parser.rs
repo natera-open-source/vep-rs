@@ -222,7 +222,10 @@ fn parse_columns(
         bail!("No alternate allele");
     }
 
-    let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
+    // A plain-`ACGT` record is never routed, so its INFO/SVTYPE is not read.
+    let svtype = (!plain_acgt_columns(ref_allele, alt_field))
+        .then(|| info.value("SVTYPE").filter(|v| perl_true(v)))
+        .flatten();
 
     // The ALT column as Perl's list-context `split` in Ensembl VEP reads it, a gVCF variant site
     // read as its real alleles (`variant_alts`), each ALT keeping its written position. Only
@@ -7141,6 +7144,25 @@ mod tests {
         assert_eq!(anchored.reference, "TTT");
         assert_eq!(anchored.alts, ["-", "TT"]);
         assert_eq!(anchored.working.as_deref(), Some("TTT/-/TT"));
+    }
+
+    /// A plain-`ACGT` record never reads INFO/SVTYPE, so its INFO column stays unsplit;
+    /// a symbolic record reads it and splits the column.
+    #[test]
+    fn a_plain_acgt_record_leaves_its_info_column_unsplit() {
+        let parse = VcfParse::default_run(true);
+        let unsplit = |line: &str| {
+            let record = parse_data_line(line, &parse);
+            assert!(record.alleles.is_ok(), "{line}");
+            let Some(RecordInfo::Split(info)) = record.info else {
+                panic!("{line}");
+            };
+            format!("{info:?}").contains("<uninit>")
+        };
+        assert!(unsplit(
+            "21\t100\tx\tA\tG,T\t.\t.\tSVTYPE=DEL;AC=1;AF=0.5;DP=30"
+        ));
+        assert!(!unsplit("21\t100\tx\tA\t<DEL>\t.\t.\tSVTYPE=DEL;END=200"));
     }
 
     /// A REF and ALT column of `ACGT` and commas alone is a sequence record whatever

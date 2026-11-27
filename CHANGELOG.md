@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Input formats and records
+  - A `--vcf` or `--individual` run no longer splits a plain-`ACGT` record's INFO column to read `SVTYPE`, using 10 percent less CPU time on 50,000 1000 Genomes chr21 sites. (#148)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
