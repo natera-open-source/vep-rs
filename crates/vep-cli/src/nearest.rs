@@ -39,7 +39,7 @@ use vep_core::minimal::rowless_first_feature;
 use vep_core::variant::InputVariant;
 
 use crate::runner::structural_variant_bounds;
-use crate::transcript_index::{LazyTranscriptIndexes, TssPoint};
+use crate::transcript_index::{ChromosomeIndexes, TssPoint};
 
 /// The identifier `--nearest` reports for a transcription start site
 /// (`Config.pm:602`).
@@ -153,7 +153,7 @@ pub(crate) fn nearest_values(
 /// rows print (OutputFactory.pm:2295-2305, :1017).
 pub(crate) fn annotate(
     variant: &mut InputVariant,
-    transcripts: &LazyTranscriptIndexes,
+    transcripts: &impl ChromosomeIndexes,
     kind: Option<NearestType>,
 ) {
     let Some(kind) = kind else {
@@ -523,7 +523,7 @@ mod tests {
                 5000,
             ),
         );
-        let transcripts = LazyTranscriptIndexes::from_indexes(by_chr);
+        let transcripts = crate::transcript_index::LazyTranscriptIndexes::from_indexes(by_chr);
         let kind = Some(NearestType::Transcript);
 
         let line = "21\t1020\t.\tTC\tT,AC\t.\t.\t.";

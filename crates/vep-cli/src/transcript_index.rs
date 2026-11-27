@@ -640,7 +640,7 @@ impl std::error::Error for ShardUnreadable {}
 /// construction and each chromosome's slot is a [`OnceLock`], so concurrent
 /// first-touch on the same chromosome initializes at most once and every thread
 /// observes the same index. A `prewarm` racing another on the
-/// same cold chromosome waits on that chromosome's `load_locks` entry rather
+/// same cold chromosome waits on that chromosome's `held` entry rather
 /// than parsing the shards a second time.
 ///
 /// The maps hash with `FxHasher`: the keys are the cache's own chromosome
@@ -648,14 +648,26 @@ impl std::error::Error for ShardUnreadable {}
 /// `Self::get` look one up for every variant.
 pub struct LazyTranscriptIndexes {
     shards: FxHashMap<String, Vec<PathBuf>>,
-    slots: FxHashMap<String, OnceLock<TranscriptIndex>>,
-    load_locks: FxHashMap<String, Mutex<()>>,
+    slots: FxHashMap<String, OnceLock<Arc<TranscriptIndex>>>,
+    /// Per chromosome, the index the run's batches last took ([`Self::hold`])
+    /// and the lock every load of the chromosome takes, so a load racing
+    /// another waits for it rather than parsing the shards a second time.
+    held: FxHashMap<String, Mutex<Held>>,
+    /// The chromosomes the last batch's indexes held ([`Self::snapshot`]),
+    /// and those a release found loading, released at the next batch.
+    last_batch: Mutex<Vec<String>>,
+    /// The span each shard's name states, beside `shards`; `None` for a name
+    /// that states none.
+    spans: FxHashMap<String, Arc<[ShardSpan]>>,
     upstream_distance: u64,
     downstream_distance: u64,
     transcript_set: TranscriptSet,
     /// Whether each load keeps the exons' stable ids on their transcripts
     /// ([`Transcript::exon_ids`]), for a run whose plugins print them.
     keep_exon_ids: bool,
+    /// Whether each load keeps the transcripts' SIFT and PolyPhen matrices,
+    /// for a run that reads them.
+    keep_predictions: bool,
     /// The GENCODE tally of every chromosome this set has loaded, summed as
     /// each load lands ([`Self::gencode_set_warning`]).
     gencode: Mutex<GencodeTally>,
@@ -679,6 +691,126 @@ pub struct LazyTranscriptIndexes {
     /// notation because the reference FASTA holds no sequence of them
     /// ([`Self::note_unread_notations`]).
     unread_notations: UnreadChromosomes,
+}
+
+/// A chromosome with at most this many shards is always loaded whole: a window
+/// saves little there, and a sequence stored across the origin of a circular
+/// sequence lies on such a small one (the mitochondrion, a plastid).
+// ponytail: a circular sequence of more shards would need its first shard in every window.
+const WHOLE_UP_TO_SHARDS: usize = 8;
+
+/// What one batch's records reach on one chromosome
+/// ([`LazyTranscriptIndexes::snapshot`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Reach {
+    /// The whole chromosome: a structural or breakend record, `--nearest`, or a
+    /// record the coordinator cannot place before it is parsed.
+    Whole,
+    /// The spans, already widened by [`LazyTranscriptIndexes::reach`], that the
+    /// batch's records overlap.
+    Spans(Vec<(u64, u64)>),
+}
+
+impl Reach {
+    /// What one record reaches: `span`, or the whole chromosome for `None`.
+    pub(crate) fn of(span: Option<(u64, u64)>) -> Self {
+        match span {
+            Some(span) => Reach::Spans(vec![span]),
+            None => Reach::Whole,
+        }
+    }
+
+    /// Adds what one more record reaches, merged into the last span where the
+    /// two meet, as a sorted input's records of one batch do.
+    pub(crate) fn add(&mut self, span: Option<(u64, u64)>) {
+        let (Reach::Spans(spans), Some((low, high))) = (&mut *self, span) else {
+            *self = Reach::Whole;
+            return;
+        };
+        match spans.last_mut() {
+            Some(last) if low <= last.1.saturating_add(1) && last.0 <= high.saturating_add(1) => {
+                *last = (last.0.min(low), last.1.max(high));
+            }
+            _ => spans.push((low, high)),
+        }
+    }
+}
+
+/// The index a chromosome's batches last took, and the shards it was built
+/// from: `None` for every shard.
+#[derive(Default)]
+struct Held {
+    index: Option<Arc<TranscriptIndex>>,
+    window: Option<Arc<[usize]>>,
+    /// The shards parsed for windows so far; once they reach the chromosome's
+    /// count the chromosome is loaded whole, so windows never cost more than
+    /// one whole load.
+    parsed: usize,
+    /// Released once, at least; a chromosome loaded whole after that is kept
+    /// to the end, so an unsorted input reloads a chromosome whole once at most.
+    released: bool,
+    kept: bool,
+    /// A window met a transcript without a `dbID`, which a cache stores once,
+    /// in the file of the megabase it starts in, so the chromosome loads whole.
+    whole_only: bool,
+}
+
+/// The span a shard's name states, `None` for a name that states none.
+type ShardSpan = Option<(u64, u64)>;
+
+/// An index with the shards it was built from, `None` for every shard.
+type HeldIndex = (Arc<TranscriptIndex>, Option<Arc<[usize]>>);
+
+/// One batch's transcript indexes: each chromosome its records reach, with the
+/// shards the index was built from (`None` for every shard). The batch keeps
+/// its indexes while it is annotated whatever the cache releases meanwhile
+/// ([`LazyTranscriptIndexes::release`]).
+#[derive(Default)]
+pub(crate) struct BatchTranscripts {
+    indexes: FxHashMap<String, HeldIndex>,
+}
+
+impl BatchTranscripts {
+    /// The batch's index of `chr`.
+    pub(crate) fn get(&self, chr: &str) -> Option<&TranscriptIndex> {
+        self.indexes.get(chr).map(|(index, _)| &**index)
+    }
+
+    /// Whether the batch's index of `chr` holds every shard `low..=high` meets.
+    pub(crate) fn covers(
+        &self,
+        cache: &LazyTranscriptIndexes,
+        chr: &str,
+        low: u64,
+        high: u64,
+    ) -> bool {
+        match self.indexes.get(chr) {
+            None => false,
+            Some((_, None)) => true,
+            Some((_, Some(window))) => cache
+                .shards_meeting(chr, &[(low, high)])
+                .into_iter()
+                .all(|shard| window.binary_search(&shard).is_ok()),
+        }
+    }
+}
+
+/// The per-chromosome indexes a variant's annotation reads: a batch's
+/// ([`BatchTranscripts`]) in the `vep` binary, a whole set's in the library.
+pub(crate) trait ChromosomeIndexes {
+    fn get(&self, chr: &str) -> Option<&TranscriptIndex>;
+}
+
+impl ChromosomeIndexes for BatchTranscripts {
+    fn get(&self, chr: &str) -> Option<&TranscriptIndex> {
+        BatchTranscripts::get(self, chr)
+    }
+}
+
+impl ChromosomeIndexes for LazyTranscriptIndexes {
+    fn get(&self, chr: &str) -> Option<&TranscriptIndex> {
+        LazyTranscriptIndexes::get(self, chr)
+    }
 }
 
 /// The HGVS notations the rows an output keeps on one chromosome are without
@@ -785,15 +917,28 @@ impl LazyTranscriptIndexes {
             .keys()
             .map(|c| (c.clone(), OnceLock::new()))
             .collect();
-        let load_locks = shards.keys().map(|c| (c.clone(), Mutex::new(()))).collect();
+        let held = shards
+            .keys()
+            .map(|c| (c.clone(), Mutex::default()))
+            .collect();
+        let spans = shards
+            .iter()
+            .map(|(chr, paths)| {
+                let spans = paths.iter().map(|path| crate::json_cache::shard_span(path));
+                (chr.clone(), spans.collect())
+            })
+            .collect();
         Ok(Self {
             shards,
             slots,
-            load_locks,
+            held,
+            last_batch: Mutex::default(),
+            spans,
             upstream_distance,
             downstream_distance,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest,
             reference: None,
@@ -816,7 +961,7 @@ impl LazyTranscriptIndexes {
         for chr in by_chr.keys() {
             if !self.slots.contains_key(chr) {
                 self.slots.insert(chr.clone(), OnceLock::new());
-                self.load_locks.insert(chr.clone(), Mutex::new(()));
+                self.held.insert(chr.clone(), Mutex::default());
             }
         }
         self.file_transcripts = Arc::new(by_chr.into_iter().collect());
@@ -837,6 +982,14 @@ impl LazyTranscriptIndexes {
         self
     }
 
+    /// Keeps the SIFT and PolyPhen matrices on the transcripts every later
+    /// load reads; on by default, off for a run without `--sift` or
+    /// `--polyphen`, which never reads them.
+    pub(crate) fn with_predictions(mut self, keep_predictions: bool) -> Self {
+        self.keep_predictions = keep_predictions;
+        self
+    }
+
     /// Hands the set the reference sequence, so that a stop codon an
     /// `_rna_edit` completes is paired with the bases the genome holds of it,
     /// as the `vep` binary pairs it under `--fasta`
@@ -853,7 +1006,7 @@ impl LazyTranscriptIndexes {
     pub fn with_reference(mut self, reference: Option<Arc<vep_fasta::IndexedFasta>>) -> Self {
         if let Some(reference) = &reference {
             for slot in self.slots.values_mut() {
-                if let Some(index) = slot.get_mut() {
+                if let Some(index) = slot.get_mut().and_then(Arc::get_mut) {
                     index.pair_completed_stop_codons(reference);
                 }
             }
@@ -899,7 +1052,7 @@ impl LazyTranscriptIndexes {
                 let cell = OnceLock::new();
                 if let Some(index) = slot.get() {
                     let moved = paired.remove(chr.as_str()).unwrap_or_default();
-                    let _ = cell.set(index.replacing(moved));
+                    let _ = cell.set(Arc::new(index.replacing(moved)));
                 }
                 (chr.clone(), cell)
             })
@@ -911,15 +1064,18 @@ impl LazyTranscriptIndexes {
         Some(Self {
             shards: self.shards.clone(),
             slots,
-            load_locks: self
-                .load_locks
+            held: self
+                .held
                 .keys()
-                .map(|chr| (chr.clone(), Mutex::new(())))
+                .map(|chr| (chr.clone(), Mutex::default()))
                 .collect(),
+            last_batch: Mutex::default(),
+            spans: self.spans.clone(),
             upstream_distance: self.upstream_distance,
             downstream_distance: self.downstream_distance,
             transcript_set: self.transcript_set,
             keep_exon_ids: self.keep_exon_ids,
+            keep_predictions: self.keep_predictions,
             gencode: Mutex::new(gencode),
             manifest: Arc::clone(&self.manifest),
             reference: Some(Arc::clone(reference)),
@@ -936,11 +1092,14 @@ impl LazyTranscriptIndexes {
         Self {
             shards: FxHashMap::default(),
             slots: FxHashMap::default(),
-            load_locks: FxHashMap::default(),
+            held: FxHashMap::default(),
+            last_batch: Mutex::default(),
+            spans: FxHashMap::default(),
             upstream_distance: 0,
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -968,22 +1127,25 @@ impl LazyTranscriptIndexes {
             .into_par_iter()
             .map(|(chr, txs)| {
                 let cell = OnceLock::new();
-                let _ = cell.set(TranscriptIndex::new(
+                let _ = cell.set(Arc::new(TranscriptIndex::new(
                     txs,
                     upstream_distance,
                     downstream_distance,
-                ));
+                )));
                 (chr, cell)
             })
             .collect();
         Self {
             shards: FxHashMap::default(),
             slots,
-            load_locks: FxHashMap::default(),
+            held: FxHashMap::default(),
+            last_batch: Mutex::default(),
+            spans: FxHashMap::default(),
             upstream_distance,
             downstream_distance,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -1007,18 +1169,21 @@ impl LazyTranscriptIndexes {
             .into_iter()
             .map(|(chr, idx)| {
                 let cell = OnceLock::new();
-                let _ = cell.set(idx);
+                let _ = cell.set(Arc::new(idx));
                 (chr, cell)
             })
             .collect();
         Self {
             shards: FxHashMap::default(),
             slots,
-            load_locks: FxHashMap::default(),
+            held: FxHashMap::default(),
+            last_batch: Mutex::default(),
+            spans: FxHashMap::default(),
             upstream_distance: 0,
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -1151,13 +1316,156 @@ impl LazyTranscriptIndexes {
                  list nor a materialized index: `slots` and `shards` are out of sync"
             );
         };
-        let _loading = self
-            .load_locks
-            .get(chr)
-            .map(|lock| lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
+        let Some(held) = self.held.get(chr) else {
+            anyhow::bail!("chr{chr} has a shard list but no load lock");
+        };
+        let held = held.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if slot.get().is_some() {
             return Ok(());
         }
+        // A whole index a batch already holds is shared, so the chromosome is
+        // parsed and its GENCODE tally counted once.
+        let built = match (&held.index, &held.window) {
+            (Some(index), None) => Arc::clone(index),
+            _ => Arc::new(self.load_whole(chr, shards)?),
+        };
+        let _ = slot.set(built);
+        Ok(())
+    }
+
+    /// The span `start..=end` reaches on its chromosome: widened both ways by
+    /// the larger distance, as a transcript's region files are reached
+    /// (`TranscriptBinIndex::reaches_a_region_file_of`).
+    pub(crate) fn reach(&self, start: u64, end: u64) -> (u64, u64) {
+        let flank = self.upstream_distance.max(self.downstream_distance);
+        (
+            start.min(end).saturating_sub(flank),
+            start.max(end).saturating_add(flank),
+        )
+    }
+
+    /// The places, in `chr`'s shard list, of the shards whose span meets one
+    /// of `spans`.
+    /// The shards are sorted by start, so each span is found by bisection on
+    /// a chromosome whose shards each state their span; a shard whose name
+    /// states none meets every span.
+    fn shards_meeting(&self, chr: &str, spans: &[(u64, u64)]) -> Vec<usize> {
+        let Some(shard_spans) = self.spans.get(chr) else {
+            return Vec::new();
+        };
+        if shard_spans.iter().any(Option::is_none) {
+            return (0..shard_spans.len()).collect();
+        }
+        let mut meeting = Vec::new();
+        for &(low, high) in spans {
+            let first =
+                shard_spans.partition_point(|span| span.is_some_and(|(_, last)| last < low));
+            for (at, span) in shard_spans.iter().enumerate().skip(first) {
+                match span {
+                    Some((start, _)) if *start > high => break,
+                    _ => meeting.push(at),
+                }
+            }
+        }
+        meeting.sort_unstable();
+        meeting.dedup();
+        meeting
+    }
+
+    /// The shards a window over `reach` loads on `chr`, or `None` when the
+    /// chromosome loads whole: under [`Reach::Whole`], on a chromosome of
+    /// [`WHOLE_UP_TO_SHARDS`] shards or fewer, on one a gene-model file adds
+    /// to (its transcripts are ranked with the cache's), under a GENCODE set
+    /// (whose warning reads every record of a loaded chromosome,
+    /// [`Self::gencode_set_warning`]), on one with a shard
+    /// whose name states no span, and when the window would hold no shard or
+    /// half the chromosome's shards or more.
+    fn window_for(&self, chr: &str, reach: &Reach) -> Option<Vec<usize>> {
+        let Reach::Spans(spans) = reach else {
+            return None;
+        };
+        let shard_spans = self.spans.get(chr)?;
+        if shard_spans.len() <= WHOLE_UP_TO_SHARDS
+            || self.file_transcripts.contains_key(chr)
+            || self.transcript_set.gencode_attribute().is_some()
+            || shard_spans.iter().any(Option::is_none)
+        {
+            return None;
+        }
+        let window = self.shards_meeting(chr, spans);
+        (!window.is_empty() && window.len() * 2 < shard_spans.len()).then_some(window)
+    }
+
+    /// The index of `chr` holding every transcript `reach` can meet, loaded
+    /// as the batch needs it; `None` for a chromosome the cache does not
+    /// cover. An index already held that covers the reach is shared; else a
+    /// window of the shards the reach meets is loaded ([`Self::load_window`]),
+    /// or the whole chromosome ([`Self::window_for`]). Every transcript a
+    /// record of the reach overlaps is one of the window's, as Ensembl VEP
+    /// reads the region files a record reaches (`AnnotationSource.pm:190`), so
+    /// the record is annotated as against the whole chromosome.
+    ///
+    /// Like [`Self::prewarm`], the load parses on the global pool, so this runs
+    /// outside the annotation pool's `install`, before a batch fans out.
+    fn hold(&self, chr: &str, reach: &Reach) -> anyhow::Result<Option<HeldIndex>> {
+        let Some(slot) = self.slots.get(chr) else {
+            return Ok(None);
+        };
+        if let Some(index) = slot.get() {
+            return Ok(Some((Arc::clone(index), None)));
+        }
+        let Some(shards) = self.shards_of(chr) else {
+            anyhow::bail!(
+                "chr{chr} is present in the chromosome key set but has neither a shard \
+                 list nor a materialized index: `slots` and `shards` are out of sync"
+            );
+        };
+        let Some(held) = self.held.get(chr) else {
+            anyhow::bail!("chr{chr} has a shard list but no load lock");
+        };
+        let mut held = held.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(index) = slot.get() {
+            return Ok(Some((Arc::clone(index), None)));
+        }
+        if let (Some(index), None) = (&held.index, &held.window) {
+            return Ok(Some((Arc::clone(index), None)));
+        }
+        let window = self
+            .window_for(chr, reach)
+            .filter(|window| !held.whole_only && held.parsed + window.len() < shards.len());
+        if let (Some(index), Some(held_window), Some(window)) = (&held.index, &held.window, &window)
+        {
+            if window
+                .iter()
+                .all(|shard| held_window.binary_search(shard).is_ok())
+            {
+                return Ok(Some((Arc::clone(index), Some(Arc::clone(held_window)))));
+            }
+        }
+        let (built, window) = match window {
+            None => {
+                held.kept |= held.released;
+                (self.load_whole(chr, shards)?, None)
+            }
+            Some(window) => match self.load_window(chr, shards, window)? {
+                Some((built, loaded)) => {
+                    held.parsed += loaded.len();
+                    (built, Some(Arc::from(loaded)))
+                }
+                None => {
+                    held.whole_only = true;
+                    (self.load_whole(chr, shards)?, None)
+                }
+            },
+        };
+        let built = Arc::new(built);
+        held.index = Some(Arc::clone(&built));
+        held.window = window.clone();
+        Ok(Some((built, window)))
+    }
+
+    /// The index of every shard of `chr`, the one [`Self::prewarm`] keeps.
+    fn load_whole(&self, chr: &str, shards: &[PathBuf]) -> anyhow::Result<TranscriptIndex> {
         let LoadedTranscripts {
             transcripts: mut txs,
             gencode: tally,
@@ -1167,6 +1475,7 @@ impl LazyTranscriptIndexes {
             &self.manifest,
             Some(&self.transcript_set),
             self.keep_exon_ids,
+            self.keep_predictions,
         )
         .map_err(|cause| ShardUnreadable::from_load(chr, cause))?;
         if let Some(reference) = &self.reference {
@@ -1177,16 +1486,197 @@ impl LazyTranscriptIndexes {
             crate::json_cache::assign_id_ranks(&mut txs);
         }
         tracing::info!("{}", crate::json_cache::chromosome_line(chr, txs.len()));
-        let built = TranscriptIndex::new(txs, self.upstream_distance, self.downstream_distance);
-        // Losing this race is harmless: the winner's index is equivalent, and
-        // the loser's tally is not added, so each chromosome counts once.
-        if slot.set(built).is_ok() {
-            self.gencode
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .add(tally);
+        self.add_tally(tally);
+        Ok(TranscriptIndex::new(
+            txs,
+            self.upstream_distance,
+            self.downstream_distance,
+        ))
+    }
+
+    /// The index of the shards of `window` on `chr`, with the shards it was
+    /// built from. Ensembl VEP's dump stores a gene's transcripts in every
+    /// region file the gene overlaps (`AnnotationSource/Database/Transcript.pm:237,
+    /// 250`), so the shards a record reaches hold every transcript it can
+    /// overlap. The window grows down until it holds the lowest shard of every
+    /// gene it holds, as the load keeps the lowest file's copy
+    /// (`json_cache::merge_shards`), whose protein features may stand in
+    /// another order than a higher copy's. `None` when the window holds a
+    /// transcript without a `dbID`, which is none of that dump's: a cache built
+    /// from a gene-model file stores a transcript once, in the file of the
+    /// megabase it starts in, so a lower file may hold one the record reaches.
+    fn load_window(
+        &self,
+        chr: &str,
+        shards: &[PathBuf],
+        window: Vec<usize>,
+    ) -> anyhow::Result<Option<(TranscriptIndex, Vec<usize>)>> {
+        let options = crate::json_cache::ShardOptions {
+            set: Some(&self.transcript_set),
+            keep_exon_ids: self.keep_exon_ids,
+            keep_predictions: self.keep_predictions,
+        };
+        let shard_spans = &self.spans[chr];
+        let mut wanted: std::collections::BTreeSet<usize> = window.into_iter().collect();
+        let mut parsed: std::collections::BTreeMap<usize, crate::json_cache::ParsedShard> =
+            std::collections::BTreeMap::new();
+        loop {
+            let todo: Vec<usize> = wanted
+                .iter()
+                .copied()
+                .filter(|at| !parsed.contains_key(at))
+                .collect();
+            if todo.is_empty() {
+                break;
+            }
+            let paths: Vec<PathBuf> = todo.iter().map(|&at| shards[at].clone()).collect();
+            let results = crate::json_cache::parse_shards(chr, &paths, &self.manifest, options);
+            for (at, result) in todo.into_iter().zip(results) {
+                let shard = result.map_err(|cause| ShardUnreadable::from_load(chr, cause))?;
+                // Every lower shard that ends at or past the lowest start this
+                // shard holds holds a gene of it.
+                if let Some(lowest) = shard.lowest_start {
+                    for (below, span) in shard_spans.iter().enumerate().take(at) {
+                        let last = span.map_or(u64::MAX, |(_, last)| last);
+                        if i64::try_from(last).unwrap_or(i64::MAX) >= lowest {
+                            wanted.insert(below);
+                        }
+                    }
+                }
+                parsed.insert(at, shard);
+            }
         }
-        Ok(())
+        let loaded: Vec<usize> = parsed.keys().copied().collect();
+        let paths: Vec<PathBuf> = loaded.iter().map(|&at| shards[at].clone()).collect();
+        let LoadedTranscripts {
+            transcripts: mut txs,
+            gencode: tally,
+        } = crate::json_cache::merge_shards(parsed.into_values().map(Ok).collect(), &paths)
+            .map_err(|cause| ShardUnreadable::from_load(chr, cause))?;
+        if txs.iter().any(|transcript| transcript.db_id.is_none()) {
+            return Ok(None);
+        }
+        if let Some(reference) = &self.reference {
+            crate::json_cache::pair_completed_stop_codons(&mut txs, reference);
+        }
+        tracing::debug!(
+            "{} from {} of {} shards",
+            crate::json_cache::chromosome_line(chr, txs.len()),
+            loaded.len(),
+            shards.len()
+        );
+        self.add_tally(tally);
+        let index = TranscriptIndex::new(txs, self.upstream_distance, self.downstream_distance);
+        Ok(Some((index, loaded)))
+    }
+
+    /// The whole index of `chr`, loaded for the purpose when no whole index is
+    /// held ([`Self::hold`]); `None` for a chromosome the cache does not cover.
+    pub(crate) fn whole(&self, chr: &str) -> anyhow::Result<Option<Arc<TranscriptIndex>>> {
+        Ok(self.hold(chr, &Reach::Whole)?.map(|(index, _)| index))
+    }
+
+    /// The whole index of `chr` already loaded, by [`Self::prewarm`] or a
+    /// batch, without loading one.
+    pub(crate) fn loaded_whole(&self, chr: &str) -> Option<Arc<TranscriptIndex>> {
+        if let Some(index) = self.slots.get(chr)?.get() {
+            return Some(Arc::clone(index));
+        }
+        let held = self
+            .held
+            .get(chr)?
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match (&held.index, &held.window) {
+            (Some(index), None) => Some(Arc::clone(index)),
+            _ => None,
+        }
+    }
+
+    /// Loads `chr` whole for the batches to share ([`Self::hold`]), as a
+    /// reader warms a chromosome ahead of them; a chromosome the batches have
+    /// released is passed over, as one the input has left, and a batch that
+    /// comes back to it loads it again.
+    pub(crate) fn warm_whole(&self, chr: &str) -> anyhow::Result<()> {
+        let released = self.held.get(chr).is_some_and(|held| {
+            held.lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .released
+        });
+        if released {
+            return Ok(());
+        }
+        self.hold(chr, &Reach::Whole).map(drop)
+    }
+
+    fn add_tally(&self, tally: GencodeTally) {
+        self.gencode
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .add(tally);
+    }
+
+    /// One batch's indexes: for each chromosome of `reaches` the cache covers,
+    /// an index holding what its records reach ([`Self::hold`]). The batches
+    /// of a run are taken in input order, so a chromosome the batch before
+    /// held and this one does not is one the input has left: the cache
+    /// releases it ([`Self::release`]), as Ensembl VEP drops the regions that
+    /// leave its buffer (`AnnotationSource.pm:109-145`).
+    pub(crate) fn snapshot(
+        &self,
+        reaches: impl IntoIterator<Item = (String, Reach)>,
+    ) -> anyhow::Result<BatchTranscripts> {
+        let mut batch = BatchTranscripts::default();
+        for (chr, reach) in reaches {
+            if let Some(held) = self.hold(&chr, &reach)? {
+                batch.indexes.insert(chr, held);
+            }
+        }
+        let mut last = self
+            .last_batch
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let loading: Vec<String> = last
+            .iter()
+            .filter(|chr| !batch.indexes.contains_key(*chr) && !self.release(chr))
+            .cloned()
+            .collect();
+        *last = batch.indexes.keys().cloned().chain(loading).collect();
+        Ok(batch)
+    }
+
+    /// A batch holding every index this set has materialized, for a caller
+    /// that built the set from loaded transcripts or warmed it itself.
+    #[cfg(test)]
+    pub(crate) fn snapshot_of_loaded(&self) -> BatchTranscripts {
+        let indexes = self
+            .slots
+            .iter()
+            .filter_map(|(chr, slot)| Some((chr.clone(), (Arc::clone(slot.get()?), None))))
+            .collect();
+        BatchTranscripts { indexes }
+    }
+
+    /// Drops the cache's hold on `chr`'s index, which a batch that took it
+    /// keeps until it is done; `false`, and nothing dropped, while a load of
+    /// the chromosome runs, so the coordinator never waits on a reader's warm
+    /// load. A chromosome loaded whole again after a release is kept
+    /// ([`Held`]); an index [`Self::prewarm`] filled is never released.
+    pub(crate) fn release(&self, chr: &str) -> bool {
+        let Some(held) = self.held.get(chr) else {
+            return true;
+        };
+        let mut held = match held.try_lock() {
+            Ok(held) => held,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        };
+        if !held.kept && held.index.is_some() {
+            held.index = None;
+            held.window = None;
+            held.released = true;
+        }
+        true
     }
 
     /// The warning a run owes once every chromosome it touched is loaded: the
@@ -1278,7 +1768,7 @@ impl LazyTranscriptIndexes {
     /// blocking is exactly what deadlocks there.
     #[doc(hidden)]
     pub fn get(&self, chr: &str) -> Option<&TranscriptIndex> {
-        self.slots.get(chr)?.get()
+        self.slots.get(chr)?.get().map(|index| &**index)
     }
 }
 
@@ -1933,11 +2423,14 @@ mod tests {
         let desynced = LazyTranscriptIndexes {
             shards: FxHashMap::default(),
             slots: [("21".to_string(), OnceLock::new())].into_iter().collect(),
-            load_locks: FxHashMap::default(),
+            held: FxHashMap::default(),
+            last_batch: Mutex::default(),
+            spans: FxHashMap::default(),
             upstream_distance: 5_000,
             downstream_distance: 5_000,
             transcript_set: TranscriptSet::default(),
             keep_exon_ids: false,
+            keep_predictions: true,
             gencode: Mutex::new(GencodeTally::default()),
             manifest: Arc::new(CacheManifest::absent("")),
             reference: None,
@@ -2285,6 +2778,222 @@ mod tests {
                 (2_100_000, "ENST_C", "ENSG_C", "C"),
             ]
         );
+    }
+
+    /// A twelve-shard chromosome: one transcript in each megabase, and gene
+    /// `ENSG_G` across the third and fourth, stored in both files (each copy
+    /// naming its own file in its symbol), with its two transcripts sharing
+    /// one stable id, so each is held to its region files.
+    fn twelve_shard_cache() -> tempfile::TempDir {
+        shard_cache(true)
+    }
+
+    /// [`twelve_shard_cache`], its records with `dbID`s under `db_ids`, else
+    /// without, as a cache built from a gene-model file holds them.
+    fn shard_cache(db_ids: bool) -> tempfile::TempDir {
+        let dir = tempfile::Builder::new()
+            .prefix("vep_window_")
+            .tempdir()
+            .unwrap();
+        let chr_dir = dir.path().join("transcripts").join("21");
+        std::fs::create_dir_all(&chr_dir).unwrap();
+        let record = |id: &str, db_id: u64, gene: &str, start: u64, end: u64, symbol: &str| {
+            let db_id = if db_ids {
+                format!(r#""dbID":{db_id},"#)
+            } else {
+                String::new()
+            };
+            format!(
+                r#"{{"stable_id":"{id}",{db_id}"gene_stable_id":"{gene}","gene_symbol":"{symbol}","start":{start},"end":{end},"strand":1,"biotype":"protein_coding","source":"ensembl"}}"#
+            )
+        };
+        for shard in 0..12u64 {
+            let (first, last) = (shard * 1_000_000 + 1, (shard + 1) * 1_000_000);
+            let mut records = vec![record(
+                &format!("ENST_{shard}"),
+                100 + shard,
+                &format!("ENSG_{shard}"),
+                first + 400_000,
+                first + 500_000,
+                "own",
+            )];
+            if shard == 2 || shard == 3 {
+                let symbol = if shard == 2 { "low" } else { "high" };
+                records.push(record("ENST_G", 1, "ENSG_G", 2_500_000, 3_600_000, symbol));
+                records.push(record("ENST_G", 2, "ENSG_G", 2_600_000, 3_100_000, symbol));
+            }
+            std::fs::write(
+                chr_dir.join(format!("{first}-{last}.json")),
+                format!("[{}]", records.join(",")),
+            )
+            .unwrap();
+        }
+        dir
+    }
+
+    /// The overlapping transcripts of `index` at `low..=high`, the region
+    /// files' test passed: id, dbID and symbol, in the order the index meets
+    /// them.
+    fn met(index: &TranscriptIndex, low: u64, high: u64) -> Vec<String> {
+        let mut met = Vec::new();
+        index.for_each_overlapping(low, high, |tx| {
+            let symbol = tx.gene_symbol.as_deref().unwrap_or("");
+            met.push(format!(
+                "{} {} {symbol}",
+                tx.stable_id,
+                tx.db_id.unwrap_or(0)
+            ));
+        });
+        met
+    }
+
+    /// A batch's window loads the shards its records reach and the lower
+    /// shards of the genes it holds, and every record of the reach meets the
+    /// transcripts, the copy kept and the region files the whole chromosome
+    /// gives it.
+    #[test]
+    fn a_window_meets_what_the_whole_chromosome_meets_within_its_reach() {
+        let dir = twelve_shard_cache();
+        let path = dir.path().to_str().unwrap();
+        let whole = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
+        whole.prewarm("21").unwrap();
+        let whole = whole.get("21").unwrap();
+        for position in [
+            3_050_000, 3_550_000, 3_590_000, 2_550_000, 400_000, 11_450_000, 3_000_001,
+        ] {
+            let lazy = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
+            let reach = Reach::Spans(vec![lazy.reach(position, position)]);
+            let batch = lazy.snapshot([("21".to_string(), reach)]).unwrap();
+            let window = batch.get("21").unwrap();
+            assert!(window.len() < whole.len(), "{position} loads a window");
+            assert_eq!(
+                met(window, position, position),
+                met(whole, position, position)
+            );
+            assert!(batch.covers(&lazy, "21", position - 5_000, position + 5_000));
+        }
+        let lazy = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
+        let reach = Reach::Spans(vec![lazy.reach(3_050_000, 3_050_000)]);
+        let batch = lazy.snapshot([("21".to_string(), reach)]).unwrap();
+        // The fourth megabase's window grew down to the third, whose copy is kept.
+        assert_eq!(
+            met(batch.get("21").unwrap(), 3_050_000, 3_050_000),
+            ["ENST_G 1 low", "ENST_G 2 low"]
+        );
+        assert!(!batch.covers(&lazy, "21", 5_000_000, 5_000_000));
+    }
+
+    /// A batch whose records lie apart grows each shard's window down by the
+    /// genes of that shard alone: a record in the first megabase beside one
+    /// in the fourth still keeps the third megabase's copy of the gene the
+    /// fourth holds.
+    #[test]
+    fn a_window_grows_down_from_each_shard_it_holds() {
+        let dir = twelve_shard_cache();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
+        let mut reach = Reach::of(Some(lazy.reach(400_001, 400_001)));
+        reach.add(Some(lazy.reach(3_050_000, 3_050_000)));
+        let batch = lazy.snapshot([("21".to_string(), reach)]).unwrap();
+        assert_eq!(
+            met(batch.get("21").unwrap(), 3_050_000, 3_050_000),
+            ["ENST_G 1 low", "ENST_G 2 low"]
+        );
+        assert_eq!(
+            met(batch.get("21").unwrap(), 400_001, 400_001),
+            ["ENST_0 100 own"]
+        );
+    }
+
+    /// A cache whose records carry no `dbID` stores a transcript once, in the
+    /// file of the megabase it starts in, so a record in a later megabase of a
+    /// transcript loads the whole chromosome and meets it.
+    #[test]
+    fn a_cache_without_db_ids_loads_the_whole_chromosome() {
+        let dir = shard_cache(false);
+        let path = dir.path().to_str().unwrap();
+        let lazy = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
+        let reach = Reach::of(Some(lazy.reach(3_550_000, 3_550_000)));
+        let batch = lazy.snapshot([("21".to_string(), reach)]).unwrap();
+        assert!(batch.covers(&lazy, "21", 11_000_000, 11_000_000));
+        assert_eq!(met(batch.get("21").unwrap(), 3_550_000, 3_550_000).len(), 1);
+    }
+
+    /// The spans of one chromosome's records merge where they meet, as a
+    /// sorted batch's do, and a whole reach absorbs every span.
+    #[test]
+    fn a_reach_merges_the_spans_that_meet() {
+        let mut reach = Reach::of(Some((10, 20)));
+        reach.add(Some((15, 30)));
+        reach.add(Some((31, 40)));
+        reach.add(Some((50, 60)));
+        assert_eq!(reach, Reach::Spans(vec![(10, 40), (50, 60)]));
+        reach.add(None);
+        assert_eq!(reach, Reach::Whole);
+        reach.add(Some((1, 2)));
+        assert_eq!(reach, Reach::Whole);
+    }
+
+    /// A release meeting a load of the chromosome leaves it held and tries
+    /// again at the next batch, and a reader's warm load of a chromosome the
+    /// batches released is passed over.
+    #[test]
+    fn a_release_waits_for_no_load_and_a_released_chromosome_is_not_warmed() {
+        let dir = twelve_shard_cache();
+        let other = dir.path().join("transcripts").join("22");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("1-1000000.json"), "[]").unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
+        lazy.snapshot([("21".to_string(), Reach::Whole)]).unwrap();
+        let loading = lazy.held["21"].lock().unwrap();
+        assert!(!lazy.release("21"));
+        drop(loading);
+        let elsewhere = || ("22".to_string(), Reach::Spans(vec![(1, 1)]));
+        lazy.snapshot([elsewhere()]).unwrap();
+        assert!(lazy.held["21"].lock().unwrap().index.is_none());
+        lazy.warm_whole("21").unwrap();
+        assert!(lazy.held["21"].lock().unwrap().index.is_none());
+        assert!(lazy.loaded_whole("21").is_none());
+        assert!(lazy.whole("21").unwrap().is_some());
+        assert!(lazy.loaded_whole("21").is_some());
+    }
+
+    /// A batch keeps its indexes when the cache releases them: the batch after
+    /// it, on another chromosome, releases the chromosome the input left, and a
+    /// batch that needs it again loads it again. A reach of half the shards or
+    /// more, and a whole reach, load the whole chromosome.
+    #[test]
+    fn a_batch_keeps_what_the_cache_releases() {
+        let dir = twelve_shard_cache();
+        let other = dir.path().join("transcripts").join("22");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("1-1000000.json"), "[]").unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
+        let near = |position: u64| {
+            (
+                "21".to_string(),
+                Reach::Spans(vec![lazy.reach(position, position)]),
+            )
+        };
+        let first = lazy.snapshot([near(400_000)]).unwrap();
+        let held = lazy.held["21"].lock().unwrap().index.clone().unwrap();
+        assert!(Arc::ptr_eq(&held, &first.indexes["21"].0));
+        let _second = lazy
+            .snapshot([("22".to_string(), Reach::Spans(vec![(1, 1)]))])
+            .unwrap();
+        assert!(lazy.held["21"].lock().unwrap().index.is_none());
+        assert_eq!(met(first.get("21").unwrap(), 400_001, 400_001).len(), 1);
+        let again = lazy.snapshot([near(400_000)]).unwrap();
+        assert!(again.get("21").unwrap().len() < 12);
+        let spans: Vec<(u64, u64)> = (0..6)
+            .map(|mb| lazy.reach(mb * 1_000_000 + 1, mb * 1_000_000 + 1))
+            .collect();
+        let half = lazy
+            .snapshot([("21".to_string(), Reach::Spans(spans))])
+            .unwrap();
+        assert_eq!(half.get("21").unwrap().len(), 14);
+        assert!(half.covers(&lazy, "21", 11_000_000, 11_000_000));
+        let whole = lazy.snapshot([("21".to_string(), Reach::Whole)]).unwrap();
+        assert!(Arc::ptr_eq(&whole.indexes["21"].0, &half.indexes["21"].0));
     }
 
     /// The GENCODE warning of a run is owed once every chromosome it touched is

@@ -10,8 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Caches, reference FASTA and the cache tools
+  - Each batch loads only the transcript shards its sequence records reach, and chromosomes the input left are released: 24 SNVs on 24 chromosomes peak at 0.80 GB, not 8.27 GB. (#187)
+  - A run without `--sift` or `--polyphen` skips the transcript shards' SIFT and PolyPhen matrices: peak memory 43 percent lower on 24 SNVs across 24 chromosomes, 16 threads. (#139)
+- Input formats and records
+  - The streaming coordinator parses only lines holding a bracket or `CHR2` for breakend mates, and `--check_existing` bisects its windows; wall time unchanged within noise on 50,000 chr21 sites, 16 threads. (#189)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
+
+### Fixed
+
+- Library crates
+  - The library's `Annotator` sets each variant's `display_consequence`, as the `vep` binary does, instead of leaving it `None`. (#146)
 
 ## [1.0.0] - 2026-11-24
 

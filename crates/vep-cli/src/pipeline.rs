@@ -122,7 +122,7 @@ use crate::runner::{
     AnnotationResources, BatchPrefetch, PipelineStats, RecordWarnings,
 };
 use crate::stats::RunAccumulators;
-use crate::transcript_index::{LazyTranscriptIndexes, ShardUnreadable};
+use crate::transcript_index::{BatchTranscripts, LazyTranscriptIndexes, Reach, ShardUnreadable};
 use crate::validate::{
     invalid_vcf_coordinate, keep_overlap_allele, looks_like_number, rowless_allele, AllelePatch,
     RecordLine, ReferenceChecks, SkipRules,
@@ -1002,7 +1002,8 @@ pub(crate) fn tabix_contig_order(
 }
 
 /// Warms transcript indexes ahead of the input on one helper thread, in the
-/// order the reader asks: the chromosome the reader has just reached and, when
+/// order the reader asks: the chromosome the reader has read [`DENSE_RECORDS`]
+/// records of in a row and, when
 /// the input's index gives the contig order, the ones after it as far as
 /// `--prewarm_ahead` says (one by default; under `all` the whole order is
 /// queued as the reader starts). One load at a time keeps the parse's
@@ -1052,7 +1053,8 @@ impl<'env> Prewarmer<'env> {
         prewarmer
     }
 
-    /// The reader has reached the input chromosome `input_chr`: it is warmed,
+    /// The reader has read [`DENSE_RECORDS`] records of the input chromosome
+    /// `input_chr` in a row: it is warmed whole,
     /// then the chromosomes after it in the index order, as many as the policy
     /// names (none under `all`, whose order was queued whole at the start).
     fn reached(&mut self, input_chr: &str) {
@@ -1077,14 +1079,20 @@ impl<'env> Prewarmer<'env> {
     }
 }
 
-/// Warms one chromosome's transcript index and, under `--regulatory`, its
-/// regulatory features, the two loads a chromosome crossing needs.
+/// The records a reader counts on one chromosome in a row before it warms the
+/// whole chromosome ahead of the batches: a sorted input that dense is cheaper
+/// to load once than in a window per batch, and the load overlaps the
+/// annotation of the batches before.
+const DENSE_RECORDS: usize = 256;
+
+/// Warms one chromosome's whole transcript index and, under `--regulatory`,
+/// its regulatory features, the two loads a chromosome crossing needs.
 pub(crate) fn prewarm_chromosome(
     transcripts: &LazyTranscriptIndexes,
     regulatory: Option<&crate::regulatory::RegulatorySource>,
     chr: &str,
 ) -> anyhow::Result<()> {
-    transcripts.prewarm(chr)?;
+    transcripts.warm_whole(chr)?;
     if let Some(source) = regulatory {
         source.prewarm(chr).map_err(regulatory_load_error)?;
     }
@@ -1092,7 +1100,9 @@ pub(crate) fn prewarm_chromosome(
 }
 
 /// [`prewarm_chromosome`] for a variant's own chromosome and, for a paired
-/// breakend, its mate's, whose features the mate position is annotated against.
+/// breakend, its mate's, whose features the mate position is annotated against:
+/// a parsed format's reader warms each record's whole chromosome as it hands
+/// the record on.
 pub(crate) fn prewarm_variant_chromosomes(
     transcripts: &LazyTranscriptIndexes,
     regulatory: Option<&crate::regulatory::RegulatorySource>,
@@ -1751,6 +1761,7 @@ fn read_vcf_lines(
     let mut input_headers: Vec<Vec<u8>> = Vec::new();
     let mut vcf_header_written = false;
     let mut last_chr: Vec<u8> = Vec::new();
+    let mut run = 0usize;
     // The empty lines met since the last record, warned about as one run.
     let mut empty_lines = 0u64;
     // The run lengths warned about so far: a later run of the same length draws
@@ -1839,7 +1850,7 @@ fn read_vcf_lines(
             // record); with the flag it is a record of the run ([`non_variant_record`]).
             // One under a true INFO/SVTYPE, which Ensembl VEP annotates as a
             // structural variant (`:237-245`), is warned about by its line.
-            if !cfg.allow_non_variant {
+            if !cfg.allow_non_variant && alt_opens_with_dot(head) {
                 let record = String::from_utf8_lossy(head);
                 if vcf_line_is_non_variant(&record) {
                     if let Some(text) = missing_alt_under_svtype(&record) {
@@ -1855,9 +1866,13 @@ fn read_vcf_lines(
 
             let chr = head.find_byte(b'\t').map_or(head, |tab| &head[..tab]);
             if chr != last_chr {
-                prewarmer.reached(&String::from_utf8_lossy(chr));
                 last_chr.clear();
                 last_chr.extend_from_slice(chr);
+                run = 0;
+            }
+            run += 1;
+            if run == DENSE_RECORDS {
+                prewarmer.reached(&String::from_utf8_lossy(chr));
             }
 
             // A skip warning quotes the raw line, of which `head` and `tail` may
@@ -2544,7 +2559,7 @@ fn stage_batch(
             prefetch: BatchPrefetch::default(),
         });
     }
-    prewarm_chromosomes(&batch.variants, c.resources)?;
+    let transcripts = prewarm_chromosomes(&batch.variants, c.resources)?;
     let prefetch_start = Instant::now();
     // The filter co-locates the batch before it is annotated, so the batch's
     // variation windows are installed here rather than by the coordinator:
@@ -2570,7 +2585,8 @@ fn stage_batch(
         }
         None => true,
     };
-    let prefetch = fetch_batch(&batch.variants, c.resources, c.pool, variation_ahead)?;
+    let mut prefetch = fetch_batch(&batch.variants, c.resources, c.pool, variation_ahead)?;
+    prefetch.transcripts = transcripts;
     debug!(
         batch_size = batch.variants.len(),
         prefetch_ms = prefetch_start.elapsed().as_millis() as u64,
@@ -2634,6 +2650,7 @@ fn coordinate(
             skips,
             mut prefetch,
         } = staged?;
+        let transcripts = Arc::clone(&prefetch.transcripts);
         if !skips.is_empty() {
             if !writer.caught_up() {
                 // The writer stopped; it reports why.
@@ -2651,7 +2668,7 @@ fn coordinate(
         // batch's error, before any of the batch reaches the writer.
         let (rendered, record_warnings) = step_or_its_panic(|| {
             if fused {
-                return annotate_render_batch(&mut batch, c, &mut spare);
+                return annotate_render_batch(&mut batch, &transcripts, c, &mut spare);
             }
             let mut warnings = RecordWarnings::default();
             if !batch.variants.is_empty() {
@@ -2675,7 +2692,7 @@ fn coordinate(
                     &mut |index, text| warnings.push(index, text),
                 );
                 count_indels_on_edited_models(&batch.variants, c.resources);
-                note_notations_the_reference_lacks(&batch.variants, c.resources);
+                note_notations_the_reference_lacks(&batch.variants, c.resources, &transcripts);
             }
             Ok((
                 render_batch(&mut batch, c, &mut spare)?,
@@ -3487,6 +3504,15 @@ fn chunk_record_end(units: &[Unit], offset: usize) -> usize {
         .unwrap_or(offset)
 }
 
+/// What a batch's tasks read beside their records: the batch's transcript
+/// indexes, and the record of a variation-file read failure, which the caller
+/// checks once the batch's tasks are done.
+#[derive(Clone, Copy)]
+struct BatchReads<'a> {
+    transcripts: &'a BatchTranscripts,
+    failure: &'a ReadFailure,
+}
+
 /// One fused task: annotates and filters `slice`, the whole records of `units`
 /// laid out from index `offset` of the batch's variants, applies the record
 /// rules, renders the units into a chunk reserved at `reserve` bytes and frees
@@ -3503,15 +3529,21 @@ fn fused_task(
     text: &[u8],
     c: &Coordinator<'_>,
     reserve: usize,
-    failure: &ReadFailure,
+    reads: BatchReads<'_>,
 ) -> anyhow::Result<(Chunk, u64, Vec<String>)> {
+    let BatchReads {
+        transcripts,
+        failure,
+    } = reads;
     let ctx = c.write_ctx;
     let resources = c.resources;
     let filter = ctx.filters_active.then_some(ctx.filter_config);
     let mut csqs = 0u64;
     let mut warnings = RecordWarnings::default();
     for (index, variant) in slice.iter_mut().enumerate() {
-        csqs += warnings.annotating(index, || annotate_one(variant, resources, failure));
+        csqs += warnings.annotating(index, || {
+            annotate_one(variant, resources, transcripts, failure)
+        });
     }
     // A task's slice is whole records (the chunk ends at a unit end), so the
     // record rules and the record step run over it in place.
@@ -3525,7 +3557,7 @@ fn fused_task(
         warnings.push(index, text)
     });
     count_indels_on_edited_models(slice, resources);
-    note_notations_the_reference_lacks(slice, resources);
+    note_notations_the_reference_lacks(slice, resources, transcripts);
     let mut out = ChunkOutput::new(ctx, reserve);
     let mut stats = c.run_stats.map(RunAccumulators::thread_slot);
     {
@@ -3569,6 +3601,7 @@ fn fused_task(
 /// task order, so the warnings the records drew are returned in record order.
 fn annotate_render_batch(
     batch: &mut ParsedBatch,
+    transcripts: &BatchTranscripts,
     c: &Coordinator<'_>,
     spare: &mut Spare,
 ) -> anyhow::Result<(Rendered, Vec<String>)> {
@@ -3589,7 +3622,18 @@ fn annotate_render_batch(
             .map(|(chunk, slice, offset)| {
                 #[cfg(test)]
                 panic_on_a_marked_record(slice);
-                fused_task(chunk, slice, offset, text, c, reserve, &failure)
+                fused_task(
+                    chunk,
+                    slice,
+                    offset,
+                    text,
+                    c,
+                    reserve,
+                    BatchReads {
+                        transcripts,
+                        failure: &failure,
+                    },
+                )
             })
             .collect::<anyhow::Result<Vec<_>>>()
     })?;
@@ -3774,19 +3818,18 @@ fn coordinate_streaming(
             }
             // `alone` is what the reader held for a batch that has no task to
             // carry it.
-            let (seq, tasks, alone) = match input {
+            let (seq, tasks, alone, transcripts) = match input {
                 InputBatch::Lines(mut lines) => {
-                    let chromosomes = batch_chromosomes(
+                    let reaches = batch_chromosomes(
                         &lines,
                         c.max_sv_size,
                         c.resources.synonyms(),
                         c.resources.transcripts(),
                         c.checks.source_chromosomes,
                         c.checks.fasta,
+                        c.resources.reaches_whole_chromosomes(),
                     );
-                    for chr in chromosomes {
-                        c.resources.prewarm_chromosome(&chr)?;
-                    }
+                    let transcripts = c.resources.hold_batch(reaches)?;
                     let chunk_units = fused_chunk_units(lines.items.len(), c);
                     let alone = if lines.items.is_empty() {
                         let held = std::mem::take(&mut lines.reports);
@@ -3794,10 +3837,15 @@ fn coordinate_streaming(
                     } else {
                         Vec::new()
                     };
-                    (lines.seq, split_lines(lines, chunk_units), alone)
+                    (
+                        lines.seq,
+                        split_lines(lines, chunk_units),
+                        alone,
+                        transcripts,
+                    )
                 }
                 InputBatch::Parsed(mut parsed) => {
-                    prewarm_chromosomes(&parsed.variants, c.resources)?;
+                    let transcripts = prewarm_chromosomes(&parsed.variants, c.resources)?;
                     let chunk_units = fused_chunk_units(parsed.units.len(), c);
                     let held = std::mem::take(&mut parsed.reports);
                     let seq = parsed.seq;
@@ -3809,7 +3857,7 @@ fn coordinate_streaming(
                         }
                         _ => held,
                     };
-                    (seq, tasks, alone)
+                    (seq, tasks, alone, transcripts)
                 }
             };
             let total = tasks.len() as u32;
@@ -3823,7 +3871,10 @@ fn coordinate_streaming(
             }
             debug!(seq, tasks = total, "batch handed to the pool");
             for (index, task) in tasks.into_iter().enumerate() {
-                scope.spawn(move |_| run_task(task, seq, index as u32, total, c, shared));
+                let transcripts = Arc::clone(&transcripts);
+                scope.spawn(move |_| {
+                    run_task(task, seq, index as u32, total, &transcripts, c, shared)
+                });
             }
             // The writer reports the tasks' skips and ends the stream at the batch
             // whose skip met a warnings file that could not be written; a warning
@@ -3888,10 +3939,16 @@ fn split_parsed(parsed: ParsedBatch, chunk_units: usize) -> Vec<TaskInput> {
     tasks
 }
 
-/// The chromosomes a line batch's records touch, as the cache names them: each
-/// record's CHROM ([`record_naming`]), and the mate chromosome of each
+/// The chromosomes a line batch's records touch, as the cache names them, in
+/// the order the records first name them, each with what its records reach:
+/// each record's CHROM ([`record_naming`]) and the mate chromosome of each
 /// breakend ([`cache_chr_name`]), read by parsing the lines whose columns can
-/// name one ([`may_name_a_breakend_mate`]).
+/// name one ([`may_name_a_breakend_mate`]). A record whose REF and ALTs are
+/// each a run of `ACGT` is a sequence record (Parser/VCF.pm:237-245) and
+/// reaches its own bases, the base after them for an insertion included,
+/// widened by the larger distance ([`LazyTranscriptIndexes::reach`]); any
+/// other record, and every record under `whole`, reaches its whole chromosome,
+/// as a breakend's mate chromosome is reached whole.
 fn batch_chromosomes(
     lines: &LineBatch,
     max_sv_size: Option<u64>,
@@ -3899,13 +3956,15 @@ fn batch_chromosomes(
     transcripts: &LazyTranscriptIndexes,
     source_chromosomes: &BTreeSet<String>,
     reference: Option<&IndexedFasta>,
-) -> Vec<String> {
-    let mut chrs: Vec<String> = Vec::new();
-    let mut push = |chr: String| {
-        if !chrs.contains(&chr) {
-            chrs.push(chr);
-        }
-    };
+    whole: bool,
+) -> Vec<(String, Reach)> {
+    let mut chrs: Vec<(String, Reach)> = Vec::new();
+    let mut push =
+        |chr: String, span: Option<(u64, u64)>| match chrs.iter_mut().find(|(c, _)| *c == chr) {
+            Some((_, reach)) => reach.add(span),
+            None => chrs.push((chr, Reach::of(span))),
+        };
+    let acgt = |b: &u8| matches!(b, b'A' | b'C' | b'G' | b'T');
     for item in &lines.items {
         let Item::Data { span, .. } = item else {
             continue;
@@ -3913,19 +3972,38 @@ fn batch_chromosomes(
         let line = &lines.text[span.clone()];
         let mut columns = line.split(|&b| b == b'\t');
         let chrom = String::from_utf8_lossy(columns.next().unwrap_or(line));
-        push(record_naming(&chrom, synonyms, transcripts, source_chromosomes, reference).1);
-        let (reference, alt) = (columns.nth(2), columns.next());
-        if !may_name_a_breakend_mate(reference.unwrap_or(b""), alt.unwrap_or(b"")) {
+        let chr = record_naming(&chrom, synonyms, transcripts, source_chromosomes, reference).1;
+        let pos = columns
+            .next()
+            .and_then(|pos| std::str::from_utf8(pos).ok()?.parse::<u64>().ok());
+        let (reference, alt) = (columns.nth(1), columns.next());
+        let (reference, alt) = (reference.unwrap_or(b""), alt.unwrap_or(b""));
+        let sequence = !reference.is_empty()
+            && reference.iter().all(acgt)
+            && alt.iter().all(|b| acgt(b) || *b == b',');
+        let span = pos
+            .filter(|_| sequence && !whole)
+            .map(|pos| transcripts.reach(pos, pos.saturating_add(reference.len() as u64)));
+        push(chr, span);
+        if !holds_a_mate_marker(line) || !may_name_a_breakend_mate(reference, alt) {
             continue;
         }
         let line = String::from_utf8_lossy(line);
         if let Ok(variants) = parse_vcf_line_with_max_sv_size(&line, false, max_sv_size) {
             for mate in variants.iter().filter_map(|v| v.mate_chr.as_deref()) {
-                push(cache_chr_name(mate, synonyms, transcripts));
+                push(cache_chr_name(mate, synonyms, transcripts), None);
             }
         }
     }
     chrs
+}
+
+/// Whether a VCF line holds a bracket or the text `CHR2`, one of which every
+/// line naming a breakend mate holds: a mate is a bracket part of REF or ALT
+/// or INFO/CHR2 (Parser/VCF.pm:491-497). A spanning deletion's `*` holds
+/// neither, so its line is never parsed for a mate.
+fn holds_a_mate_marker(line: &[u8]) -> bool {
+    line.iter().any(|&b| b == b'[' || b == b']') || line.find(b"CHR2").is_some()
 }
 
 /// Whether a VCF record with the columns `reference` and `alt` can name a
@@ -4006,17 +4084,26 @@ fn parse_task_lines(
     Ok((units, variants))
 }
 
-/// Every chromosome `variants` name, mates included, that the cache covers is
-/// materialized; `get` never loads, so an unwarmed chromosome would otherwise
-/// annotate every record on it as intergenic.
+/// The batch's indexes hold what each of `variants` reaches on every
+/// chromosome the cache covers, a mate's whole chromosome included; the batch
+/// was warmed from its lines ([`batch_chromosomes`]) and nothing loads in the
+/// pool, so a record the warm-up missed would otherwise lose its transcripts.
 fn ensure_materialized(
     variants: &[InputVariant],
-    transcripts: &LazyTranscriptIndexes,
+    transcripts: &BatchTranscripts,
+    cache: &LazyTranscriptIndexes,
 ) -> anyhow::Result<()> {
     for variant in variants {
-        for chr in std::iter::once(variant.chr.as_str()).chain(variant.mate_chr.as_deref()) {
-            if transcripts.contains_key(chr) && transcripts.get(chr).is_none() {
-                bail!("chr{chr} reached the annotation pool before its transcripts were loaded");
+        let (start, end) = crate::runner::structural_variant_bounds(variant);
+        let (low, high) = cache.reach(start, end);
+        let chr = variant.chr.as_str();
+        if cache.contains_key(chr) && !transcripts.covers(cache, chr, low, high) {
+            bail!("chr{chr} reached the annotation pool before its transcripts were loaded");
+        }
+        if let (Some(mate), Some(pos)) = (variant.mate_chr.as_deref(), variant.mate_pos) {
+            let (low, high) = cache.reach(pos, pos);
+            if cache.contains_key(mate) && !transcripts.covers(cache, mate, low, high) {
+                bail!("chr{mate} reached the annotation pool before its transcripts were loaded");
             }
         }
     }
@@ -4036,13 +4123,14 @@ fn run_task(
     seq: u64,
     index: u32,
     total: u32,
+    transcripts: &BatchTranscripts,
     c: &Coordinator<'_>,
     shared: &StreamingShared,
 ) {
     let task = AssertUnwindSafe(|| {
         #[cfg(test)]
         panic_on_a_marked_line(&input);
-        send_task_chunk(input, seq, index, total, c, shared);
+        send_task_chunk(input, seq, index, total, transcripts, c, shared);
     });
     if let Err(payload) = panic::catch_unwind(task) {
         // A send that fails means the writer has stopped; it reports why.
@@ -4144,6 +4232,7 @@ fn send_task_chunk(
     seq: u64,
     index: u32,
     total: u32,
+    transcripts: &BatchTranscripts,
     c: &Coordinator<'_>,
     shared: &StreamingShared,
 ) {
@@ -4154,10 +4243,20 @@ fn send_task_chunk(
         TaskInput::Lines { lines, items } => {
             let result =
                 parse_task_lines(&lines, items, c, &mut skips).and_then(|(units, mut variants)| {
-                    ensure_materialized(&variants, c.resources.transcripts())?;
+                    ensure_materialized(&variants, transcripts, c.resources.transcripts())?;
                     let count = variants.len() as u64;
-                    let (out, csqs, warnings) =
-                        fused_task(&units, &mut variants, 0, &lines.text, c, reserve, &failure)?;
+                    let (out, csqs, warnings) = fused_task(
+                        &units,
+                        &mut variants,
+                        0,
+                        &lines.text,
+                        c,
+                        reserve,
+                        BatchReads {
+                            transcripts,
+                            failure: &failure,
+                        },
+                    )?;
                     Ok((out, count, csqs, warnings))
                 });
             (result, Some(lines))
@@ -4171,8 +4270,19 @@ fn send_task_chunk(
         } => {
             skips = reports;
             let count = variants.len() as u64;
-            let result = fused_task(&units, &mut variants, offset, &text, c, reserve, &failure)
-                .map(|(out, csqs, warnings)| (out, count, csqs, warnings));
+            let result = fused_task(
+                &units,
+                &mut variants,
+                offset,
+                &text,
+                c,
+                reserve,
+                BatchReads {
+                    transcripts,
+                    failure: &failure,
+                },
+            )
+            .map(|(out, csqs, warnings)| (out, count, csqs, warnings));
             (result, None)
         }
     };
@@ -6287,16 +6397,76 @@ mod tests {
         );
         let synonyms = ChromosomeSynonyms::parse("MT\tchrM\n");
         assert_eq!(
-            batch_chromosomes(
+            names(batch_chromosomes(
                 &batch,
                 Some(10_000_000),
                 &synonyms,
                 &transcripts,
                 &BTreeSet::new(),
-                None
-            ),
+                None,
+                false,
+            )),
             ["21", "22", "2", "MT", "X", "9", "1"]
         );
+    }
+
+    /// A sequence record reaches its bases widened by the larger distance, a
+    /// symbolic one and a breakend's mate reach their whole chromosome, and a
+    /// position at the end of the coordinate range neither overflows nor
+    /// panics.
+    #[test]
+    fn batch_chromosomes_reach_a_records_bases_or_its_whole_chromosome() {
+        let mut batch = LineBatch::new(0, LineBuffers::default(), None);
+        batch.push_data(b"21\t1000\t.\tACG\tA\t.\tPASS\t.", b"", None, 1);
+        batch.push_data(b"21\t1010\t.\tA\tT\t.\tPASS\t.", b"", None, 2);
+        batch.push_data(
+            b"22\t500\t.\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=900",
+            b"",
+            None,
+            3,
+        );
+        batch.push_data(
+            b"1\t18446744073709551615\t.\tA\tG\t.\tPASS\t.",
+            b"",
+            None,
+            4,
+        );
+        batch.push_data(b"2\t100\t.\tN\tN[X:50[\t.\tPASS\tSVTYPE=BND", b"", None, 5);
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            ["21", "22", "1", "2", "X"]
+                .into_iter()
+                .map(|chr| (chr.to_string(), Vec::new()))
+                .collect(),
+            100,
+            200,
+        );
+        let reaches = batch_chromosomes(
+            &batch,
+            Some(10_000_000),
+            &ChromosomeSynonyms::new(),
+            &transcripts,
+            &BTreeSet::new(),
+            None,
+            false,
+        );
+        assert_eq!(
+            reaches,
+            [
+                ("21".to_string(), Reach::Spans(vec![(800, 1211)])),
+                ("22".to_string(), Reach::Whole),
+                (
+                    "1".to_string(),
+                    Reach::Spans(vec![(u64::MAX - 200, u64::MAX)])
+                ),
+                ("2".to_string(), Reach::Whole),
+                ("X".to_string(), Reach::Whole),
+            ]
+        );
+    }
+
+    /// The chromosome names of a batch's reaches, in their order.
+    fn names(reaches: Vec<(String, Reach)>) -> Vec<String> {
+        reaches.into_iter().map(|(chr, _)| chr).collect()
     }
 
     /// The REF and ALT columns the scan never parses for a mate: a run of `ACGT`
@@ -6408,7 +6578,15 @@ mod tests {
                 may_name_a_breakend_mate(reference.as_bytes(), alt.as_bytes()),
                 "{reference} {alt}"
             );
+            let line = format!("21\t100\tx\t{reference}\t{alt}\t.\t.\t{info}");
+            assert!(holds_a_mate_marker(line.as_bytes()), "{line}");
         }
+        // A spanning deletion under a true SVTYPE passes the column test, and
+        // its line, holding no bracket and no CHR2, names no mate.
+        let star = "21\t100\tx\tA\tG,*\t.\t.\tSVTYPE=DEL;END=100";
+        assert!(may_name_a_breakend_mate(b"A", b"G,*"));
+        assert!(!holds_a_mate_marker(star.as_bytes()));
+        assert!(mates("A", "G,*", "SVTYPE=DEL;END=100").is_empty());
     }
 
     /// The streaming scan warms the chromosome a bare `M` record is annotated
@@ -6427,14 +6605,15 @@ mod tests {
         );
         let accession = ChromosomeSynonyms::parse("NC_012920.1\tMT\n");
         assert_eq!(
-            batch_chromosomes(
+            names(batch_chromosomes(
                 &batch,
                 Some(10_000_000),
                 &accession,
                 &by_accession,
                 &BTreeSet::new(),
-                None
-            ),
+                None,
+                false,
+            )),
             ["NC_012920.1"]
         );
         let mut variant = parse_vcf_line("M\t100\t.\tA\tG\t.\tPASS\t.", false)
@@ -6458,7 +6637,15 @@ mod tests {
         let listed: BTreeSet<String> = ["MT".to_string()].into();
         let none = ChromosomeSynonyms::new();
         assert_eq!(
-            batch_chromosomes(&batch, Some(10_000_000), &none, &without_mt, &listed, None),
+            names(batch_chromosomes(
+                &batch,
+                Some(10_000_000),
+                &none,
+                &without_mt,
+                &listed,
+                None,
+                false,
+            )),
             ["MT"]
         );
         let mut variant = parse_vcf_line("M\t100\t.\tA\tG\t.\tPASS\t.", false)

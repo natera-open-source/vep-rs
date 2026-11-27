@@ -18,6 +18,8 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError};
 
+use rustc_hash::FxHashMap;
+
 use vep_core::consequence::{Consequence, FeatureType};
 use vep_core::prediction::PredictionTerm;
 use vep_core::terms::Vocabulary;
@@ -25,7 +27,6 @@ use vep_core::variant::{so_variation_class, InputVariant};
 use vep_io::output::fields::{utc_timestamp, Row};
 
 use crate::config::{CliError, Config};
-use crate::transcript_index::LazyTranscriptIndexes;
 
 const N_TERMS: usize = Consequence::ALL.len();
 
@@ -73,16 +74,6 @@ impl StatsFormat {
     }
 }
 
-/// The transcripts a thread's rows named on one cache chromosome: one bit per
-/// [`TranscriptConsequence::id_rank`](vep_core::consequence::TranscriptConsequence::id_rank).
-/// The gene of a set transcript is read from the loaded index when the run
-/// ends ([`RunStats::resolve_transcripts`]): a row's gene id is its transcript's
-/// `gene_stable_id`.
-struct ChromosomeRanks {
-    chr: String,
-    bits: Vec<u64>,
-}
-
 /// The records of one chromosome spelling per megabase bin: dense from bin 0
 /// below [`DENSE_BINS`], and `(bin, count)` pairs for the bins past it.
 struct ChromosomeBins {
@@ -106,19 +97,15 @@ pub(crate) struct ThreadStats {
     /// Index into `chromosomes` of the last record's chromosome: a sorted
     /// input names one chromosome for millions of records in a row.
     last_bins: usize,
-    transcripts: Vec<ChromosomeRanks>,
-    /// Index into `transcripts` of the last transcript row's cache chromosome.
-    last_ranks: usize,
-    /// The transcript rows the ranks cannot place, by id with the gene the row
-    /// carried: a row of a record naming a mate chromosome, whose rows come from
-    /// two chromosomes' indexes, or a consequence built without a loaded
-    /// transcript (rank 0). The gene is counted at once; the transcript is placed
-    /// by name when the run ends.
-    named: HashMap<Arc<str>, Arc<str>>,
+    /// The transcripts the rows named, by id with the gene the row carried:
+    /// an id two chromosomes' indexes hold (a pseudoautosomal transcript on X
+    /// and Y) is one transcript, as Ensembl VEP counts its `Feature` values
+    /// (`Stats.pm:285, 429-431`).
+    named: FxHashMap<Arc<str>, Arc<str>>,
     regulatory: HashSet<Arc<str>>,
     /// The window in front of `named` and `regulatory`, so a row of a feature
     /// the thread saw lately hashes nothing.
-    recent: [usize; RECENT_FEATURES],
+    recent: [Option<Arc<str>>; RECENT_FEATURES],
     class_buffer: String,
 }
 
@@ -136,11 +123,9 @@ impl ThreadStats {
             polyphen: [0; 4],
             chromosomes: Vec::new(),
             last_bins: 0,
-            transcripts: Vec::new(),
-            last_ranks: 0,
-            named: HashMap::new(),
+            named: FxHashMap::default(),
             regulatory: HashSet::new(),
-            recent: [usize::MAX; RECENT_FEATURES],
+            recent: [const { None }; RECENT_FEATURES],
             class_buffer: String::new(),
         }
     }
@@ -174,9 +159,6 @@ impl ThreadStats {
         }
         self.log_class(first);
 
-        // Every allele of the record is on one cache chromosome: its rank
-        // bitset is looked up once, at the first row that needs it.
-        let mut ranks: Option<usize> = None;
         for &(variant, tc) in rows {
             let Some(tc) = tc else {
                 // The `--summary` and `--most_severe` row is the record's hash
@@ -191,19 +173,11 @@ impl ThreadStats {
             }
             match tc.feature_type {
                 FeatureType::Transcript => {
-                    if tc.id_rank == 0 || variant.mate_chr.is_some() {
-                        if let (Some(id), Some(gene)) =
-                            (tc.transcript_id_handle(), tc.gene_id_handle())
-                        {
-                            if self.first_sight(id) {
-                                self.named
-                                    .entry(Arc::clone(id))
-                                    .or_insert_with(|| Arc::clone(gene));
-                            }
+                    if let (Some(id), Some(gene)) = (tc.transcript_id_handle(), tc.gene_id_handle())
+                    {
+                        if self.first_sight(id) && !self.named.contains_key(id) {
+                            self.named.insert(Arc::clone(id), Arc::clone(gene));
                         }
-                    } else {
-                        let index = *ranks.get_or_insert_with(|| self.ranks_of(&first.chr));
-                        set_bit(&mut self.transcripts[index].bits, tc.id_rank);
                     }
                     if let (Some(start), Some(length)) = (tc.protein_start, tc.protein_total) {
                         if length > 0 {
@@ -233,41 +207,22 @@ impl ThreadStats {
         }
     }
 
-    /// The index in `transcripts` of cache chromosome `chr`'s rank bitset, made
-    /// on first sight; the last answer is tried first.
-    fn ranks_of(&mut self, chr: &str) -> usize {
-        if self
-            .transcripts
-            .get(self.last_ranks)
-            .is_some_and(|last| last.chr == chr)
-        {
-            return self.last_ranks;
-        }
-        let index = match self.transcripts.iter().position(|t| t.chr == chr) {
-            Some(index) => index,
-            None => {
-                self.transcripts.push(ChromosomeRanks {
-                    chr: chr.to_string(),
-                    bits: Vec::new(),
-                });
-                self.transcripts.len() - 1
-            }
-        };
-        self.last_ranks = index;
-        index
-    }
-
     /// Whether `id` was not seen by the window lately; records it either way.
     /// Features are compared by allocation, which every row of one loaded
-    /// feature shares, so no string is read; a repeat the window missed is one
-    /// more insertion the thread's set absorbs.
+    /// feature shares, so no string is read; the window holds the ids it
+    /// records, so a released index's freed id is never mistaken for another
+    /// at its address. A repeat the window missed is one more insertion the
+    /// thread's set absorbs.
     fn first_sight(&mut self, id: &Arc<str>) -> bool {
         let address = Arc::as_ptr(id) as *const u8 as usize;
         let slot = (address >> 4) % RECENT_FEATURES;
-        if self.recent[slot] == address {
+        if self.recent[slot]
+            .as_ref()
+            .is_some_and(|seen| Arc::ptr_eq(seen, id))
+        {
             return false;
         }
-        self.recent[slot] = address;
+        self.recent[slot] = Some(Arc::clone(id));
         true
     }
 
@@ -376,26 +331,6 @@ fn add_counts<const N: usize>(totals: &mut [u64; N], counts: [u64; N]) {
     }
 }
 
-/// The word and mask of transcript `rank` in a rank bitset.
-fn bit_of(rank: u32) -> (usize, u64) {
-    ((rank >> 6) as usize, 1u64 << (rank & 63))
-}
-
-/// Sets `rank`'s bit, growing the set to hold it.
-fn set_bit(bits: &mut Vec<u64>, rank: u32) {
-    let (word, mask) = bit_of(rank);
-    if bits.len() <= word {
-        bits.resize(word + 1, 0);
-    }
-    bits[word] |= mask;
-}
-
-/// Whether `rank`'s bit is set.
-fn has_bit(bits: &[u64], rank: u32) -> bool {
-    let (word, mask) = bit_of(rank);
-    bits.get(word).is_some_and(|w| w & mask != 0)
-}
-
 /// One thread's slot on cache lines of its own: a slot sharing a line with its
 /// neighbour would have two threads writing that line on every record.
 #[repr(align(128))]
@@ -466,17 +401,9 @@ pub(crate) struct RunStats {
     polyphen: [u64; 4],
     /// Per input chromosome spelling, the records in each megabase bin.
     chromosomes: HashMap<String, BTreeMap<u64, u64>>,
-    /// Per cache chromosome, one bit per transcript rank a row named.
-    transcripts: HashMap<String, Vec<u64>>,
-    /// The transcripts named by rows the ranks could not place, until
-    /// [`Self::resolve_transcripts`] finds them in a loaded index.
-    unplaced: HashSet<Arc<str>>,
-    /// The distinct transcript ids the ranks and the names resolve to, once
-    /// [`Self::resolve_transcripts`] has read the loaded indexes.
-    resolved_transcripts: Option<usize>,
-    /// The genes of the named rows at once and of every ranked transcript once
-    /// [`Self::resolve_transcripts`] has read the loaded indexes, so the report
-    /// is built after that call.
+    /// The distinct transcript ids the rows named.
+    transcripts: HashSet<Arc<str>>,
+    /// The genes of those transcripts.
     genes: HashSet<Arc<str>>,
     regulatory_features: HashSet<Arc<str>>,
     /// The parser's final line number (`log_lines_read`), once the reader has
@@ -500,9 +427,7 @@ impl RunStats {
             sift: [0; 4],
             polyphen: [0; 4],
             chromosomes: HashMap::new(),
-            transcripts: HashMap::new(),
-            unplaced: HashSet::new(),
-            resolved_transcripts: None,
+            transcripts: HashSet::new(),
             genes: HashSet::new(),
             regulatory_features: HashSet::new(),
             lines_read: None,
@@ -534,67 +459,11 @@ impl RunStats {
                 *bins.entry(bin).or_insert(0) += count;
             }
         }
-        for ranks in thread.transcripts {
-            let bits = self.transcripts.entry(ranks.chr).or_default();
-            if bits.len() < ranks.bits.len() {
-                bits.resize(ranks.bits.len(), 0);
-            }
-            for (run, set) in bits.iter_mut().zip(ranks.bits) {
-                *run |= set;
-            }
-        }
         for (id, gene) in thread.named {
             self.genes.insert(gene);
-            self.unplaced.insert(id);
+            self.transcripts.insert(id);
         }
         self.regulatory_features.extend(thread.regulatory);
-    }
-
-    /// Counts the distinct transcript ids the rows named and their genes, reading
-    /// each set rank's transcript from the loaded indexes: an id two chromosomes'
-    /// indexes both hold (a pseudoautosomal transcript on X and Y) counts once, a
-    /// name the ranks could not place counts once with the ranks when a loaded
-    /// index holds it, and a name no index holds counts on its own, with the gene
-    /// its row carried.
-    pub(crate) fn resolve_transcripts(&mut self, indexes: &LazyTranscriptIndexes) {
-        let mut ids: HashSet<&str> = HashSet::new();
-        for chr in indexes.chromosomes() {
-            let Some(index) = indexes.get(chr) else {
-                continue;
-            };
-            let bits: &[u64] = match self.transcripts.get(chr) {
-                Some(bits) => bits,
-                None => &[],
-            };
-            if bits.is_empty() && self.unplaced.is_empty() {
-                continue;
-            }
-            for transcript in index.transcripts() {
-                let id: &str = &transcript.stable_id;
-                // The name leaves `unplaced` before the rank test, whether or not a
-                // rank also set it; a name left there would count a second time.
-                let named = !self.unplaced.is_empty() && self.unplaced.remove(id);
-                if named || (transcript.id_rank != 0 && has_bit(bits, transcript.id_rank)) {
-                    ids.insert(id);
-                    self.genes.insert(Arc::clone(&transcript.gene_stable_id));
-                }
-            }
-        }
-        self.resolved_transcripts = Some(ids.len() + self.unplaced.len());
-    }
-
-    /// Distinct transcripts the rows named (`Overlapped transcripts`): the ids
-    /// [`Self::resolve_transcripts`] counted, else the ranks set plus the names.
-    fn transcript_count(&self) -> usize {
-        self.resolved_transcripts.unwrap_or_else(|| {
-            let ranked: usize = self
-                .transcripts
-                .values()
-                .flatten()
-                .map(|word| word.count_ones() as usize)
-                .sum();
-            ranked + self.unplaced.len()
-        })
     }
 
     pub(crate) fn set_lines_read(&mut self, lines: u64) {
@@ -840,7 +709,7 @@ fn general_stats_rows(stats: &RunStats, ctx: &ReportContext) -> Vec<(String, Opt
         ),
         (
             "Overlapped transcripts".to_string(),
-            Some(stats.transcript_count().to_string()),
+            Some(stats.transcripts.len().to_string()),
         ),
         (
             "Overlapped regulatory features".to_string(),
@@ -1176,7 +1045,7 @@ mod tests {
     use vep_core::transcript::Transcript;
     use vep_core::variant::{ColocatedVariant, VariantClass};
 
-    use crate::runner::{make_runner_test_transcript, Runner};
+    use crate::runner::Runner;
 
     fn corpus() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-statistics")
@@ -1237,13 +1106,6 @@ mod tests {
         let mut consequence = transcript_row(id, gene, terms);
         consequence.id_rank = rank;
         consequence
-    }
-
-    /// A loaded transcript `id` of `gene` on `chr` at `rank`.
-    fn loaded_transcript(id: &str, gene: &str, chr: &str, rank: u32) -> Transcript {
-        let mut transcript = make_runner_test_transcript(id, gene, chr, 100);
-        transcript.id_rank = rank;
-        transcript
     }
 
     fn regulatory_row(id: &str) -> TranscriptConsequence {
@@ -1608,10 +1470,9 @@ mod tests {
         assert_eq!(general(&report, "Novel / existing variants"), Some("-"));
     }
 
-    /// `Stats.pm:365, 429-431`: the distinct `Gene` of the transcript rows, read
-    /// from the loaded index as the gene of each transcript a rank set; an
-    /// intergenic row names none, and a row the ranks cannot place brings its
-    /// own gene.
+    /// `Stats.pm:365, 429-431`: the distinct `Gene` of the transcript rows, the
+    /// gene each row's transcript carries, whatever rank the row's index gave
+    /// it; an intergenic row names none.
     #[test]
     fn overlapped_genes_counts_distinct_gene_ids_of_transcript_rows() {
         let mut thread = ThreadStats::new();
@@ -1633,83 +1494,44 @@ mod tests {
         let mut stats = RunStats::new();
         stats.merge(thread);
         stats.set_lines_read(stats.records);
-        let index = LazyTranscriptIndexes::from_loaded(
-            HashMap::from([(
-                "21".to_string(),
-                vec![
-                    loaded_transcript("ENST1", "ENSG1", "21", 1),
-                    loaded_transcript("ENST2", "ENSG1", "21", 2),
-                    loaded_transcript("ENST3", "ENSG2", "21", 70),
-                ],
-            )]),
-            0,
-            0,
-        );
-        stats.resolve_transcripts(&index);
         let report = Report::new(&stats, &context());
         assert_eq!(general(&report, "Overlapped genes"), Some("3"));
         assert_eq!(general(&report, "Overlapped transcripts"), Some("4"));
     }
 
     /// `Stats.pm:285, 429-431`: distinct `Feature` of the `Transcript` rows
-    /// across chunks and chromosomes: a transcript two chunks set counts once,
+    /// across chunks and chromosomes: a transcript two chunks name counts once,
     /// one id two chromosomes' indexes hold (a pseudoautosomal transcript on X
-    /// and Y) counts once however many ranks name it, a row the ranks cannot
-    /// place counts by name until a loaded index places it, and a name no
-    /// index holds counts on its own.
+    /// and Y) counts once, and the same transcript at two ranks (two batches'
+    /// windows rank it apart) counts once.
     #[test]
     fn overlapped_transcripts_counts_distinct_transcript_rows() {
         let v = record("21", 100, "A", "G");
         let other = record("22", 100, "A", "G");
         let shared = ranked_row("ENST1", "ENSG1", 1, &[Consequence::IntronVariant]);
         let own = ranked_row("ENST2", "ENSG1", 2, &[Consequence::IntronVariant]);
+        let reranked = ranked_row("ENST2", "ENSG1", 7, &[Consequence::IntronVariant]);
         let elsewhere = ranked_row("ENST9", "ENSG9", 2, &[Consequence::IntronVariant]);
         let unloaded = ranked_row("ENST0", "ENSG0", 0, &[Consequence::IntronVariant]);
         let mut first = ThreadStats::new();
         log(&mut first, &[&v], std::slice::from_ref(&shared));
         log(&mut first, &[&v], std::slice::from_ref(&shared));
-        // Chromosome 22's index holds ENST1 too, at its own rank.
         log(&mut first, &[&other], &[shared.clone(), elsewhere.clone()]);
         let mut second = ThreadStats::new();
         log(&mut second, &[&v], &[shared.clone(), own.clone()]);
-        // A breakend's rows name a mate chromosome, so their ranks are not read.
+        log(&mut second, &[&v], std::slice::from_ref(&reranked));
         let mut breakend = record("21", 500, "N", "A]22:100]");
         breakend.mate_chr = Some("22".to_string());
         log(&mut second, &[&breakend], &[own.clone(), unloaded]);
         let mut stats = RunStats::new();
         stats.merge(first);
         stats.merge(second);
-        stats.set_lines_read(5);
-        let before = Report::new(&stats, &context());
-        assert_eq!(general(&before, "Overlapped transcripts"), Some("6"));
-        // Before the indexes are read only the named rows' genes are known.
-        assert_eq!(general(&before, "Overlapped genes"), Some("2"));
-        let index = LazyTranscriptIndexes::from_loaded(
-            HashMap::from([
-                (
-                    "21".to_string(),
-                    vec![
-                        loaded_transcript("ENST1", "ENSG1", "21", 1),
-                        loaded_transcript("ENST2", "ENSG1", "21", 2),
-                    ],
-                ),
-                (
-                    "22".to_string(),
-                    vec![
-                        loaded_transcript("ENST1", "ENSG1", "22", 1),
-                        loaded_transcript("ENST9", "ENSG9", "22", 2),
-                    ],
-                ),
-            ]),
-            0,
-            0,
-        );
-        stats.resolve_transcripts(&index);
+        stats.set_lines_read(6);
         let report = Report::new(&stats, &context());
         assert_eq!(general(&report, "Overlapped transcripts"), Some("4"));
         assert_eq!(general(&report, "Overlapped genes"), Some("3"));
-        assert_eq!(general(&report, "Variants processed"), Some("5"));
-        assert_eq!(general(&report, "Lines of input read"), Some("5"));
+        assert_eq!(general(&report, "Variants processed"), Some("6"));
+        assert_eq!(general(&report, "Lines of input read"), Some("6"));
     }
 
     /// `Stats.pm:738`: the distinct regulatory features, `0` under
@@ -2022,9 +1844,6 @@ mod tests {
         // making another the merge would fold.
         let spellings: Vec<&str> = thread.chromosomes.iter().map(|c| c.chr.as_str()).collect();
         assert_eq!(spellings, ["21", "22"]);
-        let cache_chromosomes: Vec<&str> =
-            thread.transcripts.iter().map(|t| t.chr.as_str()).collect();
-        assert_eq!(cache_chromosomes, ["21", "22"]);
         let mut stats = RunStats::new();
         stats.merge(thread);
         stats.set_lines_read(4);

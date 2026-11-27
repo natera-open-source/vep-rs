@@ -296,7 +296,7 @@ impl TranscriptLookup {
     /// and version) and only those the run's transcript set admits.
     fn entries_of(&self, chromosome: usize) -> Result<Vec<Entry>, String> {
         let chr = &self.chromosomes[chromosome];
-        if let Some(index) = self.indexes.get(chr) {
+        if let Some(index) = self.indexes.loaded_whole(chr) {
             // The cache's transcripts alone: Ensembl VEP resolves a notation
             // through the core transcript adaptor (`Parser/HGVS.pm:174`), which
             // a gene-model file's source is no part of.
@@ -338,18 +338,21 @@ impl TranscriptLookup {
     /// materialized for the purpose when the annotation has not.
     fn materialize(&self, entry: &Entry) -> Result<Transcript, String> {
         let chr = &self.chromosomes[entry.chromosome];
-        self.indexes.prewarm(chr).map_err(error_message)?;
         self.indexes
-            .get(chr)
+            .whole(chr)
+            .map_err(error_message)?
             .and_then(|index| {
-                index.transcripts().iter().find(|transcript| {
-                    !crate::gene_model::is_from_file(transcript)
-                        && transcript.stable_id == entry.stable_id
-                        && transcript.version == entry.version
-                        && transcript.gene_stable_id == entry.gene_stable_id
-                })
+                index
+                    .transcripts()
+                    .iter()
+                    .find(|transcript| {
+                        !crate::gene_model::is_from_file(transcript)
+                            && transcript.stable_id == entry.stable_id
+                            && transcript.version == entry.version
+                            && transcript.gene_stable_id == entry.gene_stable_id
+                    })
+                    .map(|transcript| Transcript::clone(transcript))
             })
-            .map(|transcript| Transcript::clone(transcript))
             .ok_or_else(|| {
                 format!(
                     "transcript {} is indexed on chr{chr} but its materialized index lacks it",
@@ -469,10 +472,10 @@ mod tests {
         let lookup = TranscriptLookup::new(Arc::clone(&indexes), &[], false);
         assert!(lookup.by_stable_id("ENST00009999999").unwrap().is_none());
         assert!(lookup.reference.get().is_some());
-        assert!(indexes.get("21").is_none() && indexes.get("MT").is_none());
+        assert!(indexes.loaded_whole("21").is_none() && indexes.loaded_whole("MT").is_none());
         let found = lookup.by_stable_id("ENST00000291554.6").unwrap().unwrap();
         assert_eq!((found.chr.as_str(), found.version), ("21", Some(6)));
-        assert!(indexes.get("21").is_some() && indexes.get("MT").is_none());
+        assert!(indexes.loaded_whole("21").is_some() && indexes.loaded_whole("MT").is_none());
         let translated = lookup
             .by_translation_id("ENSP00000291554")
             .unwrap()
