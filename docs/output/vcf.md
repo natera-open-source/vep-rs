@@ -77,6 +77,13 @@ A balanced change keeps its position and alleles (`21 30282169 multi C A,T`). An
 
 A structural class word (`DEL`, `DUP`, `INS`, `TDUP`, `INV` and the rest) is written as `<DEL>`, `<DUP>`, `<INS>` or `<TDUP>`, or as its class term in angle brackets (`<inversion>`), one base before its span with `END=` in INFO. The `GRCh38-input-ensembl`, `GRCh38-input-hgvs` and `GRCh38-input-spdi` corpora compare these lines with Ensembl VEP 116.3's. A COSMIC or HGMD identifier resolved from the cache, whose stored allele is the word `COSMIC_MUTATION` or `HGMD_MUTATION`, takes that word in angle brackets as its ALT ([Identifier input](../divergences/id-input.md)).
 
+The header of such a run has no `##contig` line, as Ensembl VEP 116.3 writes none, so htslib refuses to write the file as BCF (`Contig '21' is not defined in the header`). Adding the contig lines from the reference's FASTA index first lets `bcftools view -Ob` and `bcftools index` read it:
+
+```shell
+bcftools reheader --fai reference.fa.fai out.vcf -o with-contigs.vcf
+bcftools view -Ob -o out.bcf with-contigs.vcf
+```
+
 ## Keeping an earlier annotation (`--keep_csq`)
 
 An input that Ensembl VEP or vep-rs annotated before carries a `CSQ=` entry and the header lines that describe it. Without `--keep_csq` the first entry under the field's name is removed from each line and its `##INFO` and `##VEP` header lines are dropped, so the output describes one annotation. With `--keep_csq` every input header line stays and the new entry is appended under the same name. The header then carries two `##INFO=<ID=CSQ,...>` lines (the old Format list and the new one) and two `##VEP=` lines, and a line's INFO column carries two `CSQ=` keys, the old entry first. An empty entry under the name is removed alone, where Ensembl VEP's substitution takes the next field too ([the divergence page](../divergences/empty-csq-entry.md)).
