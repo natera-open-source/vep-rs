@@ -285,7 +285,7 @@ fn the_conversion_a_refusal_names_on_a_table_with_no_index_writes_a_store_the_pl
             &root.join("index-version"),
             &through_index,
             |table| store_of_an_earlier_index_version(table, case.flags),
-            &format!("unsupported index version: 4 (expected 5); {RECONVERT}"),
+            &format!("unsupported index version: 4 (expected 6); {RECONVERT}"),
             case.flags,
         );
     }
@@ -339,7 +339,7 @@ fn the_conversion_a_refusal_names_on_a_table_with_no_index_writes_a_store_the_pl
         format!(
             "WARNING: Failed to instantiate plugin REVEL: tabix index {} not found; a plugin \
              data file needs its .tbi index beside it, so index it with tabix without -C; the \
-             store {} beside the table is refused: unsupported index version: 4 (expected 5); \
+             store {} beside the table is refused: unsupported index version: 4 (expected 6); \
              {RECONVERT}",
             tbi.display(),
             store.display()

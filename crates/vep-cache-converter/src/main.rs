@@ -42,14 +42,14 @@ use noodles::csi::binning_index::index::header::Format;
 use noodles::csi::binning_index::BinningIndex;
 use tracing::{info, warn};
 use vep_builtins::binary_store::{
-    BinaryStoreStream, BinaryStoreWriter, ContentIdentity, StorePaths,
+    BinaryAnnotator, BinaryStoreStream, BinaryStoreWriter, ContentIdentity, StorePaths,
 };
 use vep_builtins::tabix::TabixConfig;
 use vep_builtins::PluginError;
 use vep_cli::regulatory::{count_shard_features, BindingMatrices};
 use vep_core::cache_info::left_out::SEQ_EDITS;
 use vep_core::cache_info::REGULATORY_SCHEMA;
-use vep_core::cache_manifest::{CacheManifest, HashingReader};
+use vep_core::cache_manifest::{CacheManifest, Digest};
 use vep_core::coordinate::is_cache_path_component;
 use vep_core::stderr;
 
@@ -119,6 +119,19 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         no_verify: bool,
     },
+    /// Check a binary annotation store against its table in full: the chunked
+    /// SHA256 of the whole .vpd and of the whole table (not their sha256sum),
+    /// which a plugin's open checks only by length and by their first and last
+    /// MiB.
+    Verify {
+        /// The binary data file (.vpd); its index (.vpdi) lies beside it.
+        #[arg(long)]
+        store: String,
+
+        /// The table the store was converted from.
+        #[arg(long)]
+        table: String,
+    },
 }
 
 /// A failed run prints one line, `ERROR: [cache-converter] <message>`, on
@@ -174,6 +187,11 @@ fn run() -> Result<()> {
             cfg.alt_col = None;
             cfg.zero_based = zero_based;
             convert_plugin_data(&input, &output, &cfg, verify_all, no_verify)?;
+        }
+        Some(Commands::Verify { store, table }) => {
+            BinaryAnnotator::verify(Path::new(&store), Path::new(&table))
+                .map_err(|e| anyhow::anyhow!("{}", e.detail()))?;
+            info!(store, table, "the store answers for the table");
         }
         None => {
             let output_dir = cli
@@ -674,7 +692,7 @@ fn stream_table(
     let store_refusal = |e: PluginError| anyhow::anyhow!("failed to write binary store: {e}");
     let mut file =
         fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let mut hashed = HashingReader::new(&file);
+    let mut hashed = ChunkHashed::new(&file);
     let reader = bgzf::io::Reader::new(&mut hashed);
     let mut lines = vep_builtins::tabix::BoundedLines::new(BufReader::new(reader), path);
 
@@ -763,9 +781,43 @@ fn stream_table(
     Ok(TableRead {
         stream,
         spans,
-        source: ContentIdentity::new(sha256, length),
+        source: ContentIdentity::new(
+            sha256,
+            length,
+            ContentIdentity::sampled_of_file(path).with_context(read_failed)?,
+        ),
         rows,
     })
+}
+
+/// A reader taking the digest a store's index records of every byte read
+/// ([`vep_builtins::binary_store::chunked_sha256`]).
+struct ChunkHashed<R> {
+    inner: R,
+    hashed: vep_builtins::binary_store::ChunkedSha256<std::io::Sink>,
+}
+
+impl<R: Read> ChunkHashed<R> {
+    fn new(inner: R) -> Self {
+        Self {
+            inner,
+            hashed: vep_builtins::binary_store::ChunkedSha256::new(std::io::sink()),
+        }
+    }
+
+    /// Reads the rest of the stream and returns the digest of all of it.
+    fn digest_to_end(mut self) -> std::io::Result<Digest> {
+        std::io::copy(&mut self.inner, &mut self.hashed)?;
+        Ok(self.hashed.finish().1)
+    }
+}
+
+impl<R: Read> Read for ChunkHashed<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        self.hashed.write_all(&buf[..read])?;
+        Ok(read)
+    }
 }
 
 /// The bytes of one row of a span scratch file: a start and an end.
@@ -977,7 +1029,7 @@ fn read_tabix_records(path: &Path, cfg: &TabixConfig) -> Result<GroupedRecords> 
 
     let mut file =
         fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let mut hashed = HashingReader::new(&file);
+    let mut hashed = ChunkHashed::new(&file);
     let reader = bgzf::io::Reader::new(&mut hashed);
     let buf_reader = BufReader::new(reader);
 
@@ -1060,7 +1112,12 @@ fn read_tabix_records(path: &Path, cfg: &TabixConfig) -> Result<GroupedRecords> 
     let sha256 = hashed.digest_to_end().with_context(read_failed)?;
     let length = file.stream_position().with_context(read_failed)?;
 
-    Ok((header_names, grouped, ContentIdentity::new(sha256, length)))
+    let sampled = ContentIdentity::sampled_of_file(path).with_context(read_failed)?;
+    Ok((
+        header_names,
+        grouped,
+        ContentIdentity::new(sha256, length, sampled),
+    ))
 }
 
 /// Result of concordance verification.
@@ -3787,13 +3844,18 @@ mod tests {
         assert_eq!(cells, [["21", "100", "A", "0.5\u{FFFD}"]]);
     }
 
-    /// `index` with the digest it ends with replaced by the SHA256 of the
-    /// bytes before it, as the writer seals an index: a test that alters a
-    /// field seals the index again to reach the check behind the digest.
+    /// `index` with the trailer it ends with written again for the bytes
+    /// before it, as the writer seals an index: a test that alters a field
+    /// seals the index again to reach the check behind the trailer.
     fn resealed(index: &[u8]) -> Vec<u8> {
-        let body = &index[..index.len() - 32];
-        let digest = HashingReader::new(body).digest_to_end().unwrap();
-        [body, &digest[..]].concat()
+        let body = &index[..index.len() - (32 + 8 + 32)];
+        let digest = vep_builtins::binary_store::chunked_sha256(body);
+        // A body under one MiB is sampled whole from each end.
+        let sampled = vep_core::cache_manifest::HashingReader::new(&[body, body].concat()[..])
+            .digest_to_end()
+            .unwrap();
+        let length = (body.len() as u64).to_le_bytes();
+        [body, &digest[..], &length[..], &sampled[..]].concat()
     }
 
     /// A store the verification faults is removed where it was published: an

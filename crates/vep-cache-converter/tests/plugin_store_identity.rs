@@ -17,7 +17,6 @@ use noodles::csi::binning_index::index::header::{Builder as HeaderBuilder, Forma
 use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
 use vep_builtins::annotation_store::open_best_store;
 use vep_builtins::tabix::TabixConfig;
-use vep_core::cache_manifest::file_digest;
 
 const HEADER: &str = "#chr\tpos\tmean\tmedian_approx\ttotal_DP\tover_1\tover_5\tover_10\tover_15\
                       \tover_20\tover_25\tover_30\tover_50\tover_100";
@@ -233,9 +232,12 @@ fn annotate(dir: &Path, table: &Path) -> Run {
     }
 }
 
+/// The digest a store's index records of the file at `path`, its chunked
+/// SHA256, in the spelling the log gives it.
 fn hex(path: &Path) -> String {
-    file_digest(path)
+    vep_builtins::binary_store::ContentIdentity::of_file(path)
         .unwrap()
+        .sha256
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
@@ -314,8 +316,9 @@ fn an_index_of_another_store_leaves_the_table_answering() {
 }
 
 /// The backend a plugin reads is logged in both branches: a store that is
-/// used with its table's path and the SHA256 of the table and of the store's
-/// data, each the digest of the file as it lies on disk, and a table read
+/// used with its table's path and the digest the index records of the table
+/// and of the store's data (the chunked SHA256), each of the file as it lies
+/// on disk, and a table read
 /// with no store beside it under its own line.
 #[test]
 fn the_backend_read_is_logged_with_the_table_and_both_digests() {
@@ -710,4 +713,44 @@ fn a_position_past_the_last_one_the_index_holds_is_no_probe() {
         );
         assert!(rows_at(last + 1).is_empty(), "{name}");
     }
+}
+
+/// `verify` holds a store to the whole table and data file: a fresh store
+/// passes and exits 0, and after the table is replaced at the same length it
+/// exits 1 on the one error line naming the table that differs.
+#[test]
+fn verify_checks_a_store_against_its_whole_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = write_table(dir.path(), "cov.tsv.gz", 13826645, "2.0000e+00");
+    let store = convert(&table);
+    let verify = || {
+        Command::new(env!("CARGO_BIN_EXE_vep-cache-converter"))
+            .arg("verify")
+            .arg("--store")
+            .arg(&store)
+            .arg("--table")
+            .arg(&table)
+            .output()
+            .unwrap()
+    };
+    let passed = verify();
+    assert!(
+        passed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&passed.stderr)
+    );
+
+    let before = std::fs::metadata(&table).unwrap().len();
+    write_table(dir.path(), "cov.tsv.gz", 13826645, "9.0000e+00");
+    assert_eq!(std::fs::metadata(&table).unwrap().len(), before);
+    let refused = verify();
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.starts_with(&format!(
+            "ERROR: [cache-converter] store source differs: the table {} has SHA256 ",
+            table.display()
+        )),
+        "{stderr}"
+    );
 }

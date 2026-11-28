@@ -263,14 +263,14 @@ fn table_is_read_with_its_index_and_named_with_its_store_without(
     field: &str,
 ) {
     let corpus = corpus(corpus_name);
-    for version in [4u32, 6] {
+    for version in [4u32, 7] {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         let table = staged_table(dir, &corpus.join(table));
         let store = store_of_index_version(&table, version);
         let value = format!("{plugin},file={}", table.display());
         let store_refusal =
-            format!("unsupported index version: {version} (expected 5); {RECONVERT}");
+            format!("unsupported index version: {version} (expected 6); {RECONVERT}");
 
         let read = run(dir, "with-index", &corpus, &value, field);
         assert_eq!(read.code, Some(0), "{plugin}, version {version}");

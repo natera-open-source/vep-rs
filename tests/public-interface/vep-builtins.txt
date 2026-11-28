@@ -12,12 +12,11 @@ method	vep_builtins::annotation_store::AnnotationStore::query	fn(&self, chr: &st
 method	vep_builtins::annotation_store::AnnotationStore::query_batch	fn(&self, regions: &[(&str, u64, u64)]) -> core::result::Result<vep_builtins::tabix::BatchQueryResult, vep_builtins::traits::PluginError>; required
 function	vep_builtins::annotation_store::open_best_store	fn(tabix_path: &std::path::Path, config: vep_builtins::tabix::TabixConfig) -> core::result::Result<alloc::boxed::Box<dyn vep_builtins::annotation_store::AnnotationStore>, vep_builtins::traits::PluginError>
 module	vep_builtins::binary_store	mod
-auto traits	vep_builtins::binary_store::BinaryAnnotator	RefUnwindSafe, Unpin, UnwindSafe
-implementation	vep_builtins::binary_store::BinaryAnnotator	impl core::marker::Send for vep_builtins::binary_store::BinaryAnnotator
-implementation	vep_builtins::binary_store::BinaryAnnotator	impl core::marker::Sync for vep_builtins::binary_store::BinaryAnnotator
+auto traits	vep_builtins::binary_store::BinaryAnnotator	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 implementation	vep_builtins::binary_store::BinaryAnnotator	impl vep_builtins::annotation_store::AnnotationStore for vep_builtins::binary_store::BinaryAnnotator
 struct	vep_builtins::binary_store::BinaryAnnotator	struct; named fields, some private
 method	vep_builtins::binary_store::BinaryAnnotator::open	fn(vpd_path: &std::path::Path, config: &vep_builtins::tabix::TabixConfig) -> core::result::Result<Self, vep_builtins::traits::PluginError>
+method	vep_builtins::binary_store::BinaryAnnotator::verify	fn(vpd_path: &std::path::Path, table: &std::path::Path) -> core::result::Result<(), vep_builtins::traits::PluginError>
 auto traits	vep_builtins::binary_store::BinaryStoreStream	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 implementation	vep_builtins::binary_store::BinaryStoreStream	impl core::ops::drop::Drop for vep_builtins::binary_store::BinaryStoreStream
 struct	vep_builtins::binary_store::BinaryStoreStream	struct; named fields, some private
@@ -40,9 +39,12 @@ implementation	vep_builtins::binary_store::ContentIdentity	impl core::fmt::Debug
 implementation	vep_builtins::binary_store::ContentIdentity	impl core::marker::Copy for vep_builtins::binary_store::ContentIdentity
 struct	vep_builtins::binary_store::ContentIdentity	struct; named fields; #[non_exhaustive]
 field	vep_builtins::binary_store::ContentIdentity::length	u64
-method	vep_builtins::binary_store::ContentIdentity::new	fn(sha256: vep_core::cache_manifest::Digest, length: u64) -> Self
+method	vep_builtins::binary_store::ContentIdentity::new	fn(sha256: vep_core::cache_manifest::Digest, length: u64, sampled: vep_core::cache_manifest::Digest) -> Self
 method	vep_builtins::binary_store::ContentIdentity::of_file	fn(path: &std::path::Path) -> std::io::error::Result<Self>
+field	vep_builtins::binary_store::ContentIdentity::sampled	vep_core::cache_manifest::Digest
+method	vep_builtins::binary_store::ContentIdentity::sampled_of_file	fn(path: &std::path::Path) -> std::io::error::Result<vep_core::cache_manifest::Digest>
 field	vep_builtins::binary_store::ContentIdentity::sha256	vep_core::cache_manifest::Digest
+constant	vep_builtins::binary_store::SAMPLE_BYTES	const: u64
 auto traits	vep_builtins::binary_store::StorePaths	RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 implementation	vep_builtins::binary_store::StorePaths	impl core::clone::Clone for vep_builtins::binary_store::StorePaths
 implementation	vep_builtins::binary_store::StorePaths	impl core::cmp::Eq for vep_builtins::binary_store::StorePaths

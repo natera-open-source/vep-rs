@@ -548,7 +548,7 @@ fn a_table_of_one_record_is_counted_in_the_singular() {
         [
             format!(" INFO vep_cache_converter: Converting {input} to binary store"),
             " INFO vep_cache_converter: Read 1 record across 1 chromosome in <time>".to_string(),
-            " INFO vep_cache_converter: Wrote 1 record: data=0.0 MB, index=0.2 KB in <time>"
+            " INFO vep_cache_converter: Wrote 1 record: data=0.0 MB, index=0.3 KB in <time>"
                 .to_string(),
             " INFO vep_cache_converter: Concordance: PASS (3/3 sampled positions match) in <time>"
                 .to_string(),

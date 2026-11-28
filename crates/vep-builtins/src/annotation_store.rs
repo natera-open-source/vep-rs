@@ -441,12 +441,12 @@ mod tests {
 
         let vpdi = dir.path().join("scores.tsv.vpdi");
         let index = std::fs::read(&vpdi).unwrap();
-        for other in [4u32, 6] {
+        for other in [4u32, 7] {
             let mut patched = index.clone();
             patched[4..8].copy_from_slice(&other.to_le_bytes());
             std::fs::write(&vpdi, patched).unwrap();
             let refusal = named(&format!(
-                "unsupported index version: {other} (expected 5); convert the table again with \
+                "unsupported index version: {other} (expected 6); convert the table again with \
                  vep-cache-converter convert-plugin-data; a data file with no index is converted \
                  with --no-verify"
             ));
@@ -464,7 +464,7 @@ mod tests {
         );
         std::fs::rename(dir.path().join("scores.tsv.gz.tbi"), &on_the_stem).unwrap();
         let refusal = named(
-            "unsupported index version: 6 (expected 5); convert the table again with \
+            "unsupported index version: 7 (expected 6); convert the table again with \
              vep-cache-converter convert-plugin-data",
         );
         assert_eq!(checked(), refusal);
@@ -477,7 +477,8 @@ mod tests {
         assert_eq!(opened(), refusal);
 
         std::fs::write(&vpdi, index).unwrap();
-        table_without_tbi("21\t100\tC");
+        // A replaced table of another length, which every open refuses.
+        table_without_tbi("21\t100\tCC");
         assert_eq!(checked(), "the check passed");
         let differs = crate::binary_store::BinaryAnnotator::open(&store, &config(&data))
             .err()
@@ -497,14 +498,14 @@ mod tests {
         // A table that is gone, beside the store of another index version:
         // nothing is left to convert, so the line ends on the conversion.
         let mut patched = std::fs::read(&vpdi).unwrap();
-        patched[4..8].copy_from_slice(&6u32.to_le_bytes());
+        patched[4..8].copy_from_slice(&7u32.to_le_bytes());
         std::fs::write(&vpdi, patched).unwrap();
         std::fs::remove_file(&data).unwrap();
         assert_eq!(
             checked(),
             format!(
                 "plugin initialization failed: data file {} not found; the store {} beside the \
-                 table is refused: unsupported index version: 6 (expected 5); convert the table \
+                 table is refused: unsupported index version: 7 (expected 6); convert the table \
                  again with vep-cache-converter convert-plugin-data",
                 data.display(),
                 store.display()
