@@ -669,6 +669,31 @@ fn oversize_span_is_skipped_with_the_max_sv_size_warning() {
     }
 }
 
+/// Under `--max_sv_size -1` a span no allocation can hold ends the run with one
+/// input refusal, as Ensembl VEP dies building its `'N' x` reference
+/// (Parser/Region.pm:189), instead of aborting the process without a word.
+#[test]
+fn a_span_past_memory_ends_the_run_with_one_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = write(
+        dir.path(),
+        "huge.region.txt",
+        "21:1-4611686018427387903/G\n",
+    );
+    let out = output_path(dir.path());
+    let output = vep(
+        dir.path(),
+        &region,
+        &out,
+        &["--format", "region", "--max_sv_size", "-1"],
+    );
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert_eq!(
+        stderr(&output),
+        "ERROR: [input] variant size (4611686018427387902) cannot be held in memory\n"
+    );
+}
+
 /// The `--chr` list silences `validate_vf`'s refusals of a record on another
 /// chromosome (Parser.pm:470-472 runs before the size check at :491-500), so
 /// an oversize region on `Z` is dropped without a word under `--chr 21`; a line

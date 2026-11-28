@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 1.0.0 and the digest of its source archive, `vep-rs-1.0.0.tar.gz`. (#126)
 
+### Fixed
+
+- Input formats and records
+  - A region line whose span no allocation can hold, under `--max_sv_size -1`, ends the run with one `ERROR: [input]` line instead of aborting the process. (#193)
+
 ## [1.0.0] - 2026-11-24
 
 ### Added
